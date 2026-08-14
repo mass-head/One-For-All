@@ -1,0 +1,301 @@
+// Polyfill browser globals for pdf parsers in Node.js
+if (typeof global.DOMMatrix === 'undefined') {
+  global.DOMMatrix = class DOMMatrix {
+    constructor() {
+      this.a = 1; this.b = 0; this.c = 0; this.d = 1; this.e = 0; this.f = 0;
+    }
+  };
+}
+
+const express = require('express');
+const multer = require('multer');
+const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
+const pdfParse = require('pdf-parse');
+const sharp = require('sharp');
+const cors = require('cors');
+const path = require('path');
+const fs = require('fs');
+const { exec } = require('child_process');
+const util = require('util');
+
+const execPromise = util.promisify(exec);
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Setup directories
+const TEMP_DIR = path.join(__dirname, 'temp_uploads');
+if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+
+app.use(cors());
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Storage configuration
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, TEMP_DIR),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
+    cb(null, `${uniqueSuffix}${path.extname(file.originalname)}`);
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 100 * 1024 * 1024 } // 100MB
+});
+
+const cleanupFiles = (...filePaths) => {
+  filePaths.forEach((p) => {
+    if (p && fs.existsSync(p)) {
+      try { fs.unlinkSync(p); } catch (e) {}
+    }
+  });
+};
+
+// Binary resolver for LibreOffice
+const getSofficeBinary = () => {
+  if (process.platform === 'win32') {
+    const winPaths = [
+      'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
+      'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe',
+      path.join(process.env.LOCALAPPDATA || '', 'Programs\\LibreOffice\\program\\soffice.exe')
+    ];
+    for (const p of winPaths) {
+      if (fs.existsSync(p)) return `"${p}"`;
+    }
+  }
+  return 'soffice';
+};
+
+// Filter resolver for office document formats
+const getConversionParams = (inputExt, targetExt) => {
+  let inFilter = '';
+  let outFilter = targetExt;
+
+  if (inputExt === 'pdf') {
+    inFilter = '--infilter="writer_pdf_import"';
+    if (targetExt === 'docx') outFilter = 'docx:"MS Word 2007 XML"';
+    else if (targetExt === 'doc') outFilter = 'doc:"MS Word 97"';
+    else if (targetExt === 'odt') outFilter = 'odt:writer8';
+    else if (targetExt === 'txt') outFilter = 'txt:Text (encoded)';
+    else if (targetExt === 'html') outFilter = 'html:HTML (StarWriter)';
+    else if (targetExt === 'epub') outFilter = 'epub';
+  } else {
+    if (targetExt === 'pdf') outFilter = 'pdf:writer_pdf_Export';
+    else if (targetExt === 'docx') outFilter = 'docx:"MS Word 2007 XML"';
+    else if (targetExt === 'doc') outFilter = 'doc:"MS Word 97"';
+    else if (targetExt === 'odt') outFilter = 'odt:writer8';
+    else if (targetExt === 'txt') outFilter = 'txt:Text (encoded)';
+    else if (targetExt === 'html') outFilter = 'html:HTML (StarWriter)';
+    else if (targetExt === 'epub') outFilter = 'epub';
+  }
+
+  return { inFilter, outFilter };
+};
+
+// ==========================================
+// UNIVERSAL & ROBUST CONVERSION ENDPOINT
+// ==========================================
+app.post('/api/convert', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+
+  const { targetFormat } = req.body;
+  if (!targetFormat) {
+    cleanupFiles(req.file.path);
+    return res.status(400).json({ error: 'Target format required.' });
+  }
+
+  const inputPath = req.file.path;
+  const originalExt = path.extname(req.file.originalname).replace(/^\./, '').toLowerCase();
+  const cleanTargetExt = targetFormat.replace(/^\./, '').toLowerCase();
+  const originalNameWithoutExt = path.parse(req.file.originalname).name;
+  const sofficeBin = getSofficeBinary();
+
+  try {
+    const fileBytes = fs.readFileSync(inputPath);
+
+    // --- CASE 1: PDF -> TXT (Pure Node Extraction) ---
+    if (originalExt === 'pdf' && cleanTargetExt === 'txt') {
+      const parsedData = await pdfParse(fileBytes);
+      cleanupFiles(inputPath);
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${originalNameWithoutExt}.txt"`);
+      return res.send(parsedData.text || 'No extractable text found.');
+    }
+
+    // --- CASE 2: Image -> PDF (Pure Node Embedding) ---
+    if (['png', 'jpg', 'jpeg', 'webp'].includes(originalExt) && cleanTargetExt === 'pdf') {
+      const pdfDoc = await PDFDocument.create();
+      let img;
+      if (originalExt === 'png') {
+        img = await pdfDoc.embedPng(fileBytes);
+      } else {
+        // Convert to standard JPEG buffer using Sharp if needed
+        const jpegBuffer = await sharp(fileBytes).jpeg().toBuffer();
+        img = await pdfDoc.embedJpg(jpegBuffer);
+      }
+
+      const page = pdfDoc.addPage([img.width, img.height]);
+      page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
+
+      const pdfBytes = await pdfDoc.save();
+      cleanupFiles(inputPath);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${originalNameWithoutExt}.pdf"`);
+      return res.send(Buffer.from(pdfBytes));
+    }
+
+    // --- CASE 3: Image -> Image (PNG/JPG/WEBP Conversion via Sharp) ---
+    if (['png', 'jpg', 'jpeg', 'webp'].includes(originalExt) && ['png', 'jpg', 'jpeg', 'webp'].includes(cleanTargetExt)) {
+      const targetFormatName = cleanTargetExt === 'jpg' ? 'jpeg' : cleanTargetExt;
+      const convertedBuffer = await sharp(fileBytes).toFormat(targetFormatName).toBuffer();
+      cleanupFiles(inputPath);
+
+      res.setHeader('Content-Type', `image/${cleanTargetExt}`);
+      res.setHeader('Content-Disposition', `attachment; filename="${originalNameWithoutExt}.${cleanTargetExt}"`);
+      return res.send(convertedBuffer);
+    }
+
+    // --- CASE 4: TXT / HTML -> PDF (Direct Pure Node Generation) ---
+    if (originalExt === 'txt' && cleanTargetExt === 'pdf') {
+      const textContent = fs.readFileSync(inputPath, 'utf8');
+      const pdfDoc = await PDFDocument.create();
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      
+      const lines = textContent.split(/\r?\n/);
+      let page = pdfDoc.addPage([595.28, 841.89]); // A4
+      let y = 800;
+
+      for (const line of lines) {
+        if (y < 50) {
+          page = pdfDoc.addPage([595.28, 841.89]);
+          y = 800;
+        }
+        page.drawText(line.substring(0, 90), { x: 50, y, size: 10, font, color: rgb(0, 0, 0) });
+        y -= 14;
+      }
+
+      const pdfBytes = await pdfDoc.save();
+      cleanupFiles(inputPath);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${originalNameWithoutExt}.pdf"`);
+      return res.send(Buffer.from(pdfBytes));
+    }
+
+    // --- CASE 5: All Other Office / Doc Formats via LibreOffice ---
+    const { inFilter, outFilter } = getConversionParams(originalExt, cleanTargetExt);
+    const cmd = `${sofficeBin} --headless ${inFilter} --convert-to ${outFilter} "${inputPath}" --outdir "${TEMP_DIR}"`;
+    await execPromise(cmd);
+
+    const generatedFileName = `${path.parse(inputPath).name}.${cleanTargetExt}`;
+    const generatedFilePath = path.join(TEMP_DIR, generatedFileName);
+
+    if (!fs.existsSync(generatedFilePath)) {
+      throw new Error(`Output file was not generated by LibreOffice.`);
+    }
+
+    res.download(generatedFilePath, `${originalNameWithoutExt}.${cleanTargetExt}`, (err) => {
+      cleanupFiles(inputPath, generatedFilePath);
+    });
+
+  } catch (error) {
+    console.error('Conversion Error:', error.message);
+    cleanupFiles(inputPath);
+    res.status(500).json({ 
+      error: `Could not convert .${originalExt} to .${cleanTargetExt}. Verify file content is valid.` 
+    });
+  }
+});
+
+// ==========================================
+// PDF LIVE EDIT ENDPOINT
+// ==========================================
+app.post('/api/pdf/apply-edits', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No PDF uploaded.' });
+
+  const inputPath = req.file.path;
+
+  try {
+    const annotations = req.body.annotations ? JSON.parse(req.body.annotations) : [];
+    const fileBytes = fs.readFileSync(inputPath);
+    
+    const pdfDoc = await PDFDocument.load(fileBytes);
+    const pages = pdfDoc.getPages();
+    const defaultFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+    for (const item of annotations) {
+      const pageIndex = parseInt(item.pageIndex, 10) || 0;
+      if (pageIndex < 0 || pageIndex >= pages.length) continue;
+
+      const page = pages[pageIndex];
+      const { width: pdfWidth, height: pdfHeight } = page.getSize();
+
+      const scaleX = item.canvasWidth ? (pdfWidth / item.canvasWidth) : 1;
+      const scaleY = item.canvasHeight ? (pdfHeight / item.canvasHeight) : 1;
+
+      // 1. Draw Text
+      if (item.type === 'text' && item.text) {
+        const fontSize = Math.max(6, (parseFloat(item.fontSize) || 16) * scaleY);
+        const posX = Math.max(0, (parseFloat(item.x) || 0) * scaleX);
+        const posY = pdfHeight - ((parseFloat(item.y) || 0) * scaleY) - fontSize;
+
+        page.drawText(String(item.text), {
+          x: posX,
+          y: Math.max(0, posY),
+          size: fontSize,
+          font: defaultFont,
+          color: rgb(0, 0, 0)
+        });
+      }
+
+      // 2. Draw Image
+      if (item.type === 'image' && item.imageData) {
+        const posX = Math.max(0, (parseFloat(item.x) || 0) * scaleX);
+        const imgWidth = (parseFloat(item.width) || 100) * scaleX;
+        const imgHeight = (parseFloat(item.height) || 100) * scaleY;
+        const posY = pdfHeight - ((parseFloat(item.y) || 0) * scaleY) - imgHeight;
+
+        const base64Data = item.imageData.replace(/^data:image\/\w+;base64,/, '');
+        const imageBuffer = Buffer.from(base64Data, 'base64');
+
+        const embeddedImage = item.imageData.includes('image/png')
+          ? await pdfDoc.embedPng(imageBuffer)
+          : await pdfDoc.embedJpg(imageBuffer);
+
+        page.drawImage(embeddedImage, {
+          x: posX,
+          y: Math.max(0, posY),
+          width: imgWidth,
+          height: imgHeight
+        });
+      }
+    }
+
+    const modifiedPdfBytes = await pdfDoc.save();
+    cleanupFiles(inputPath);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="edited_${req.file.originalname}"`);
+    res.send(Buffer.from(modifiedPdfBytes));
+
+  } catch (error) {
+    console.error('PDF Edit Processing Error:', error);
+    cleanupFiles(inputPath);
+    res.status(500).json({ error: error.message || 'Failed to apply edits.' });
+  }
+});
+
+// Explicit root fallback
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.listen(PORT, () => {
+  console.log(`=========================================`);
+  console.log(` All For One Server running on Port: ${PORT}`);
+  console.log(` Open: http://localhost:${PORT}`);
+  console.log(`=========================================`);
+});

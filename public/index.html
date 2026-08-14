@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>All For One - Document Converter & PDF Live Editor</title>
+  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+
+  <!-- Google AdSense Auto Ads Script -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX"
+     crossorigin="anonymous"></script>
+
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --success: #16a34a;
+      --radius: 12px;
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 1.5rem 1rem; }
+    .container { width: 100%; max-width: 960px; margin: 0 auto; }
+
+    header { text-align: center; margin-bottom: 1.5rem; }
+    header h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 800; color: var(--primary); margin-bottom: 0.25rem; }
+    header p { color: var(--text-muted); font-size: clamp(0.85rem, 2.5vw, 1rem); }
+
+    /* Dropzone */
+    .dropzone {
+      border: 2px dashed #cbd5e1; border-radius: var(--radius); background-color: var(--card);
+      padding: clamp(2rem, 5vw, 3.5rem) 1rem; text-align: center; cursor: pointer; position: relative;
+      box-shadow: var(--shadow); transition: all 0.2s ease;
+    }
+    .dropzone:hover, .dropzone.drag-over { border-color: var(--primary); background-color: #f5f3ff; }
+    .dropzone i.upload-icon { font-size: 3rem; color: var(--primary); margin-bottom: 0.75rem; }
+    .dropzone input[type="file"] { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+
+    /* Active File Header */
+    .file-bar {
+      display: none; align-items: center; justify-content: space-between;
+      background: var(--card); padding: 0.85rem 1.2rem; border-radius: var(--radius);
+      box-shadow: var(--shadow); margin-bottom: 1rem; border: 1px solid var(--border);
+    }
+    .file-bar .info { display: flex; align-items: center; gap: 0.75rem; overflow: hidden; }
+    .file-bar .info i { font-size: 1.5rem; color: var(--primary); flex-shrink: 0; }
+    .file-bar .info span { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: clamp(150px, 40vw, 500px); }
+
+    /* Sections */
+    .section { display: none; background: var(--card); padding: 1.25rem; border-radius: var(--radius); margin-top: 1.25rem; box-shadow: var(--shadow); border: 1px solid var(--border); }
+    .section h3 { font-size: 1.1rem; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+
+    /* Category Groupings */
+    .category-group { margin-bottom: 1rem; }
+    .category-label { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.4rem; letter-spacing: 0.5px; }
+
+    /* Buttons */
+    .btn-row { display: flex; gap: 0.45rem; flex-wrap: wrap; align-items: center; }
+    .btn {
+      padding: 0.5rem 0.85rem; border-radius: 8px; border: none; font-weight: 600; font-size: 0.8rem;
+      cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-secondary { background: #f1f5f9; color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: #e2e8f0; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-success { background: var(--success); color: #fff; }
+
+    /* Editor Viewport */
+    .editor-container { position: relative; margin-top: 1rem; background: #475569; border-radius: 8px; padding: 1rem 0.5rem; overflow-x: auto; display: flex; justify-content: center; min-height: 250px; }
+    .canvas-wrapper { box-shadow: 0 10px 25px rgba(0,0,0,0.3); background: #ffffff; line-height: 0; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>One For All</h1>
+    <p>Convert documents, e-books, images, or edit PDF content live</p>
+  </header>
+
+  <div class="dropzone" id="dropzone">
+    <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
+    <h3>Choose a file or drag & drop it here</h3>
+    <p>Supports PDF, DOCX, DOC, ODT, RTF, EPUB, TXT, HTML, JPG, PNG</p>
+    <input type="file" id="file-input">
+  </div>
+
+  <div class="file-bar" id="file-bar">
+    <div class="info">
+      <i class="fa-solid fa-file-lines" id="file-icon"></i>
+      <span id="file-name">document.pdf</span>
+    </div>
+    <button class="btn btn-danger" id="delete-file-btn">
+      <i class="fa-solid fa-trash-can"></i> Remove File
+    </button>
+  </div>
+
+  <!-- CONVERT SECTION -->
+  <div class="section" id="convert-section">
+    <h3><i class="fa-solid fa-repeat" style="color: var(--primary);"></i> Convert Document</h3>
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
+      Select an output format:
+    </p>
+
+    <!-- Documents -->
+    <div class="category-group">
+      <div class="category-label"><i class="fa-regular fa-file-lines"></i> Word & Documents</div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="convertDocument('pdf')"><i class="fa-solid fa-file-pdf"></i> PDF</button>
+        <button class="btn btn-secondary" onclick="convertDocument('docx')"><i class="fa-solid fa-file-word"></i> DOCX</button>
+        <button class="btn btn-secondary" onclick="convertDocument('doc')"><i class="fa-solid fa-file-word"></i> DOC</button>
+        <button class="btn btn-secondary" onclick="convertDocument('odt')"><i class="fa-solid fa-file-lines"></i> ODT</button>
+        <button class="btn btn-secondary" onclick="convertDocument('rtf')"><i class="fa-solid fa-align-left"></i> RTF</button>
+        <button class="btn btn-secondary" onclick="convertDocument('txt')"><i class="fa-solid fa-font"></i> TXT</button>
+      </div>
+    </div>
+
+    <!-- Web & E-Books -->
+    <div class="category-group">
+      <div class="category-label"><i class="fa-solid fa-book-open"></i> E-Books & Web</div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="convertDocument('epub')"><i class="fa-solid fa-book"></i> EPUB</button>
+        <button class="btn btn-secondary" onclick="convertDocument('html')"><i class="fa-solid fa-code"></i> HTML</button>
+      </div>
+    </div>
+
+    <!-- Images -->
+    <div class="category-group">
+      <div class="category-label"><i class="fa-solid fa-images"></i> Images</div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="convertDocument('png')"><i class="fa-solid fa-image"></i> PNG</button>
+        <button class="btn btn-secondary" onclick="convertDocument('jpg')"><i class="fa-solid fa-image"></i> JPG</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PDF LIVE EDITOR -->
+  <div class="section" id="edit-section">
+    <h3><i class="fa-solid fa-pen-nib" style="color: var(--primary);"></i> Live PDF Editor</h3>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="addEditableText()"><i class="fa-solid fa-font"></i> Add Text</button>
+      <label class="btn btn-secondary" style="cursor: pointer; margin: 0;">
+        <i class="fa-solid fa-image"></i> Add Image
+        <input type="file" id="img-loader" accept="image/*" style="display: none;">
+      </label>
+      <button class="btn btn-secondary" onclick="deleteSelectedObject()"><i class="fa-solid fa-eraser"></i> Delete Selected</button>
+      <button class="btn btn-success" style="margin-left: auto;" id="save-pdf-btn" onclick="saveEditedPDF()">
+        <i class="fa-solid fa-download"></i> Save & Download
+      </button>
+    </div>
+
+    <div class="editor-container">
+      <div class="canvas-wrapper">
+        <canvas id="pdf-fabric-canvas"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  let currentFile = null;
+  let fabricCanvas = null;
+
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('file-input');
+  const fileBar = document.getElementById('file-bar');
+  const fileNameDisplay = document.getElementById('file-name');
+  const fileIcon = document.getElementById('file-icon');
+  const deleteFileBtn = document.getElementById('delete-file-btn');
+  const convertSection = document.getElementById('convert-section');
+  const editSection = document.getElementById('edit-section');
+  const imgLoader = document.getElementById('img-loader');
+  const savePdfBtn = document.getElementById('save-pdf-btn');
+
+  ['dragenter', 'dragover'].forEach(n => dropzone.addEventListener(n, (e) => { e.preventDefault(); dropzone.classList.add('drag-over'); }));
+  ['dragleave', 'drop'].forEach(n => dropzone.addEventListener(n, (e) => { e.preventDefault(); dropzone.classList.remove('drag-over'); }));
+
+  dropzone.addEventListener('drop', (e) => {
+    if (e.dataTransfer.files.length) handleUploadedFile(e.dataTransfer.files[0]);
+  });
+
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length) handleUploadedFile(e.target.files[0]);
+  });
+
+  function handleUploadedFile(file) {
+    currentFile = file;
+    fileNameDisplay.textContent = file.name;
+    dropzone.style.display = 'none';
+    fileBar.style.display = 'flex';
+    convertSection.style.display = 'block';
+
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    fileIcon.className = isPdf ? 'fa-solid fa-file-pdf' : 'fa-solid fa-file-lines';
+
+    if (isPdf) {
+      editSection.style.display = 'block';
+      loadPdfIntoEditor(file);
+    } else {
+      editSection.style.display = 'none';
+    }
+  }
+
+  deleteFileBtn.addEventListener('click', resetAll);
+
+  function resetAll() {
+    currentFile = null;
+    fileInput.value = '';
+    imgLoader.value = '';
+    if (fabricCanvas) { fabricCanvas.dispose(); fabricCanvas = null; }
+    dropzone.style.display = 'block';
+    fileBar.style.display = 'none';
+    convertSection.style.display = 'none';
+    editSection.style.display = 'none';
+  }
+
+  async function convertDocument(targetFormat) {
+    if (!currentFile) return;
+
+    const formData = new FormData();
+    formData.append('file', currentFile);
+    formData.append('targetFormat', targetFormat);
+
+    try {
+      const res = await fetch('/api/convert', { method: 'POST', body: formData });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Conversion failed.');
+      }
+      const blob = await res.blob();
+      const baseName = currentFile.name.substring(0, currentFile.name.lastIndexOf('.')) || currentFile.name;
+      downloadBlob(blob, `${baseName}.${targetFormat}`);
+    } catch (err) {
+      alert(err.message || 'Conversion failed. Check server logs.');
+    }
+  }
+
+  async function loadPdfIntoEditor(file) {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument(new Uint8Array(arrayBuffer)).promise;
+    const page = await pdf.getPage(1);
+
+    const scale = window.innerWidth < 600 ? 0.75 : 1.1;
+    const viewport = page.getViewport({ scale });
+
+    const bgCanvas = document.createElement('canvas');
+    const ctx = bgCanvas.getContext('2d');
+    bgCanvas.width = viewport.width;
+    bgCanvas.height = viewport.height;
+
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    if (fabricCanvas) fabricCanvas.dispose();
+    fabricCanvas = new fabric.Canvas('pdf-fabric-canvas', { width: viewport.width, height: viewport.height });
+
+    fabric.Image.fromURL(bgCanvas.toDataURL(), (img) => {
+      fabricCanvas.setBackgroundImage(img, fabricCanvas.renderAll.bind(fabricCanvas));
+    });
+  }
+
+  function addEditableText() {
+    if (!fabricCanvas) return;
+    const text = new fabric.IText('Type here...', {
+      left: 50, top: 50, fontSize: 20, fill: '#000000',
+      cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false
+    });
+    fabricCanvas.add(text);
+    fabricCanvas.setActiveObject(text);
+  }
+
+  imgLoader.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file || !fabricCanvas) return;
+    const reader = new FileReader();
+    reader.onload = (f) => {
+      fabric.Image.fromURL(f.target.result, (img) => {
+        img.scaleToWidth(140);
+        img.set({ left: 60, top: 60, cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false });
+        fabricCanvas.add(img);
+        fabricCanvas.setActiveObject(img);
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+
+  function deleteSelectedObject() {
+    if (!fabricCanvas) return;
+    const active = fabricCanvas.getActiveObject();
+    if (active) fabricCanvas.remove(active);
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && fabricCanvas) {
+      const active = fabricCanvas.getActiveObject();
+      if (active && !active.isEditing) fabricCanvas.remove(active);
+    }
+  });
+
+  async function saveEditedPDF() {
+    if (!fabricCanvas || !currentFile) return;
+    const origHtml = savePdfBtn.innerHTML;
+
+    try {
+      savePdfBtn.disabled = true;
+      savePdfBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+
+      const objects = fabricCanvas.getObjects();
+      const annotations = [];
+
+      for (const obj of objects) {
+        if (obj.type === 'i-text' || obj.type === 'text') {
+          annotations.push({
+            type: 'text',
+            pageIndex: 0,
+            text: obj.text,
+            x: obj.left,
+            y: obj.top,
+            fontSize: obj.fontSize * (obj.scaleY || 1),
+            canvasWidth: fabricCanvas.width,
+            canvasHeight: fabricCanvas.height
+          });
+        } else if (obj.type === 'image') {
+          annotations.push({
+            type: 'image',
+            pageIndex: 0,
+            x: obj.left,
+            y: obj.top,
+            width: obj.getScaledWidth(),
+            height: obj.getScaledHeight(),
+            imageData: obj.toDataURL(),
+            canvasWidth: fabricCanvas.width,
+            canvasHeight: fabricCanvas.height
+          });
+        }
+      }
+
+      const formData = new FormData();
+      formData.append('file', currentFile);
+      formData.append('annotations', JSON.stringify(annotations));
+
+      const res = await fetch('/api/pdf/apply-edits', { method: 'POST', body: formData });
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Failed to save edits');
+      }
+
+      const blob = await res.blob();
+      downloadBlob(blob, `edited_${currentFile.name}`);
+    } catch (err) {
+      alert(`Could not save PDF edits: ${err.message}`);
+    } finally {
+      savePdfBtn.disabled = false;
+      savePdfBtn.innerHTML = origHtml;
+    }
+  }
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+</script>
+
+</body>
+</html>
