@@ -84,9 +84,30 @@
     .btn-danger { background: var(--danger); color: #fff; }
     .btn-success { background: var(--success); color: #fff; }
 
-    /* Editor Viewport */
-    .editor-container { position: relative; margin-top: 1rem; background: #475569; border-radius: 8px; padding: 1rem 0.5rem; overflow-x: auto; display: flex; justify-content: center; min-height: 250px; }
-    .canvas-wrapper { box-shadow: 0 10px 25px rgba(0,0,0,0.3); background: #ffffff; line-height: 0; }
+    /* Mobile Responsive Editor Viewport */
+    .editor-container {
+      position: relative;
+      margin-top: 1rem;
+      background: #475569;
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 250px;
+      width: 100%;
+    }
+    .canvas-wrapper {
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      background: #ffffff;
+      line-height: 0;
+      margin: 0 auto;
+      max-width: 100%;
+    }
+    .canvas-container {
+      margin: 0 auto !important;
+    }
   </style>
 </head>
 <body>
@@ -168,7 +189,7 @@
       </button>
     </div>
 
-    <div class="editor-container">
+    <div class="editor-container" id="editor-container">
       <div class="canvas-wrapper">
         <canvas id="pdf-fabric-canvas"></canvas>
       </div>
@@ -261,8 +282,13 @@
     const pdf = await pdfjsLib.getDocument(new Uint8Array(arrayBuffer)).promise;
     const page = await pdf.getPage(1);
 
-    const scale = window.innerWidth < 600 ? 0.75 : 1.1;
-    const viewport = page.getViewport({ scale });
+    const baseViewport = page.getViewport({ scale: 1.0 });
+    const container = document.getElementById('editor-container');
+    const availableWidth = Math.min(window.innerWidth - 64, (container.clientWidth || 700) - 32);
+    
+    // Scale proportionally to fit mobile width without overflowing
+    const calculatedScale = Math.min(availableWidth / baseViewport.width, 1.2);
+    const viewport = page.getViewport({ scale: Math.max(calculatedScale, 0.45) });
 
     const bgCanvas = document.createElement('canvas');
     const ctx = bgCanvas.getContext('2d');
@@ -272,7 +298,10 @@
     await page.render({ canvasContext: ctx, viewport }).promise;
 
     if (fabricCanvas) fabricCanvas.dispose();
-    fabricCanvas = new fabric.Canvas('pdf-fabric-canvas', { width: viewport.width, height: viewport.height });
+    fabricCanvas = new fabric.Canvas('pdf-fabric-canvas', { 
+      width: viewport.width, 
+      height: viewport.height 
+    });
 
     fabric.Image.fromURL(bgCanvas.toDataURL(), (img) => {
       fabricCanvas.setBackgroundImage(img, fabricCanvas.renderAll.bind(fabricCanvas));
@@ -282,7 +311,7 @@
   function addEditableText() {
     if (!fabricCanvas) return;
     const text = new fabric.IText('Type here...', {
-      left: 50, top: 50, fontSize: 20, fill: '#000000',
+      left: 20, top: 20, fontSize: 18, fill: '#000000',
       cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false
     });
     fabricCanvas.add(text);
@@ -295,8 +324,8 @@
     const reader = new FileReader();
     reader.onload = (f) => {
       fabric.Image.fromURL(f.target.result, (img) => {
-        img.scaleToWidth(140);
-        img.set({ left: 60, top: 60, cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false });
+        img.scaleToWidth(120);
+        img.set({ left: 30, top: 30, cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false });
         fabricCanvas.add(img);
         fabricCanvas.setActiveObject(img);
       });
