@@ -1,7 +1,7 @@
-# Use official Node.js runtime as the base image
+# Use official Node.js runtime as base image
 FROM node:20-bookworm-slim
 
-# Install LibreOffice, standard fonts, and required graphics libraries
+# Install LibreOffice and required system packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice \
     libreoffice-writer \
@@ -21,12 +21,12 @@ RUN npm install --omit=dev
 # Copy the rest of the application code
 COPY . .
 
-# Expose server port
+# Expose port
 EXPOSE 3000
 
 # Set environment variables
 ENV PORT=3000
 ENV NODE_ENV=production
 
-# Start the application
+# Start application
 CMD ["node", "server.js"]
