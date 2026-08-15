@@ -146,10 +146,10 @@
     </button>
   </div>
 
-  <!-- BATCH MERGE SECTION (Shown when 2+ files uploaded) -->
+  <!-- BATCH MERGE SECTION -->
   <div class="section" id="batch-section">
     <h3><i class="fa-solid fa-layer-group" style="color: var(--primary);"></i> Batch Actions</h3>
-    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">You selected multiple files. You can combine them into a single PDF document:</p>
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">You selected multiple files. Combine all images into a single multi-page PDF:</p>
     <button class="btn btn-primary" id="batch-pdf-btn" onclick="executeBatchPdfMerge()">
       <i class="fa-solid fa-file-pdf"></i> Combine All Images into One PDF
     </button>
@@ -385,7 +385,6 @@
         studioSection.style.display = 'none';
       }
     } else {
-      // Multi-file batch selection
       fileNameDisplay.textContent = `${files.length} files selected`;
       fileIcon.className = 'fa-solid fa-layer-group';
       convertSection.style.display = 'none';
@@ -896,12 +895,16 @@
   function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
+    a.style.display = 'none';
     a.href = url;
     a.download = filename;
+    a.target = '_blank';
     document.body.appendChild(a);
     a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 2000);
   }
 </script>
 

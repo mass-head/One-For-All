@@ -115,22 +115,29 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
   }
 
   const inputPath = req.file.path;
-  const originalExt = path.extname(req.file.originalname).replace(/^\./, '').toLowerCase();
+  
+  let originalExt = path.extname(req.file.originalname).replace(/^\./, '').toLowerCase();
+  if (!originalExt && req.file.mimetype) {
+    if (req.file.mimetype.includes('pdf')) originalExt = 'pdf';
+    else if (req.file.mimetype.includes('jpeg') || req.file.mimetype.includes('jpg')) originalExt = 'jpg';
+    else if (req.file.mimetype.includes('png')) originalExt = 'png';
+  }
+
   const cleanTargetExt = targetFormat.replace(/^\./, '').toLowerCase();
-  const originalNameWithoutExt = path.parse(req.file.originalname).name;
+  const originalNameWithoutExt = path.parse(req.file.originalname).name || 'converted_file';
   const sofficeBin = getSofficeBinary();
 
   try {
     const fileBytes = fs.readFileSync(inputPath);
 
-    // PDF -> TXT / HTML
+    // --- CASE 1: PDF -> TXT & PDF -> HTML ---
     if (originalExt === 'pdf' && (cleanTargetExt === 'txt' || cleanTargetExt === 'html')) {
       const parsedData = await pdfParse(fileBytes);
       cleanupFiles(inputPath);
 
       if (cleanTargetExt === 'txt') {
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.setHeader('Content-Disposition', `attachment; filename="${originalNameWithoutExt}.txt"`);
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(originalNameWithoutExt)}.txt"`);
         return res.send(parsedData.text || 'No extractable text found.');
       } else {
         const textBody = (parsedData.text || 'No text extracted')
@@ -160,12 +167,12 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
 </html>`;
 
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.setHeader('Content-Disposition', `attachment; filename="${originalNameWithoutExt}.html"`);
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(originalNameWithoutExt)}.html"`);
         return res.send(htmlOutput);
       }
     }
 
-    // Image -> PDF
+    // --- CASE 2: Image -> PDF ---
     if (['png', 'jpg', 'jpeg', 'webp'].includes(originalExt) && cleanTargetExt === 'pdf') {
       const pdfDoc = await PDFDocument.create();
       let img;
@@ -183,22 +190,22 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
       cleanupFiles(inputPath);
 
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${originalNameWithoutExt}.pdf"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(originalNameWithoutExt)}.pdf"`);
       return res.send(Buffer.from(pdfBytes));
     }
 
-    // Image -> Image (Sharp)
+    // --- CASE 3: Image -> Image ---
     if (['png', 'jpg', 'jpeg', 'webp'].includes(originalExt) && ['png', 'jpg', 'jpeg', 'webp'].includes(cleanTargetExt)) {
       const targetFormatName = cleanTargetExt === 'jpg' ? 'jpeg' : cleanTargetExt;
       const convertedBuffer = await sharp(fileBytes).toFormat(targetFormatName).toBuffer();
       cleanupFiles(inputPath);
 
       res.setHeader('Content-Type', `image/${cleanTargetExt}`);
-      res.setHeader('Content-Disposition', `attachment; filename="${originalNameWithoutExt}.${cleanTargetExt}"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(originalNameWithoutExt)}.${cleanTargetExt}"`);
       return res.send(convertedBuffer);
     }
 
-    // TXT -> PDF
+    // --- CASE 4: TXT -> PDF ---
     if (originalExt === 'txt' && cleanTargetExt === 'pdf') {
       const textContent = fs.readFileSync(inputPath, 'utf8');
       const pdfDoc = await PDFDocument.create();
@@ -221,31 +228,36 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
       cleanupFiles(inputPath);
 
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${originalNameWithoutExt}.pdf"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(originalNameWithoutExt)}.pdf"`);
       return res.send(Buffer.from(pdfBytes));
     }
 
-    // LibreOffice Conversion
+    // --- CASE 5: LibreOffice with isolated profile for headless stability ---
+    const userProfileDir = path.join(TEMP_DIR, `lo_profile_${Date.now()}`);
     const { inFilter, outFilter } = getConversionParams(originalExt, cleanTargetExt);
-    const cmd = `${sofficeBin} --headless ${inFilter} --convert-to ${outFilter} "${inputPath}" --outdir "${TEMP_DIR}"`;
-    await execPromise(cmd);
+    const cmd = `${sofficeBin} "-env:UserInstallation=file://${userProfileDir.replace(/\\/g, '/')}" --headless ${inFilter} --convert-to ${outFilter} "${inputPath}" --outdir "${TEMP_DIR}"`;
+    
+    await execPromise(cmd, { timeout: 30000 });
 
     const generatedFileName = `${path.parse(inputPath).name}.${cleanTargetExt}`;
     const generatedFilePath = path.join(TEMP_DIR, generatedFileName);
 
     if (!fs.existsSync(generatedFilePath)) {
-      throw new Error(`Output file was not generated by LibreOffice.`);
+      throw new Error(`Conversion process produced no output.`);
     }
 
     res.download(generatedFilePath, `${originalNameWithoutExt}.${cleanTargetExt}`, (err) => {
       cleanupFiles(inputPath, generatedFilePath);
+      if (fs.existsSync(userProfileDir)) {
+        try { fs.rmSync(userProfileDir, { recursive: true, force: true }); } catch (e) {}
+      }
     });
 
   } catch (error) {
     console.error('Conversion Error:', error.message);
     cleanupFiles(inputPath);
     res.status(500).json({ 
-      error: `Could not convert .${originalExt} to .${cleanTargetExt}. Verify file content is valid.` 
+      error: `Could not convert .${originalExt || 'unknown'} to .${cleanTargetExt}. Format pairing may not be supported.` 
     });
   }
 });
