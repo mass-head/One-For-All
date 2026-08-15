@@ -102,7 +102,7 @@
       border: 1px solid var(--border); font-size: 0.9rem; color: var(--primary);
     }
 
-    /* Editor Viewport with smooth scroll & touch pan support */
+    /* Editor Viewport with 2-Finger Touch Navigation */
     .editor-container {
       position: relative;
       margin-top: 1rem;
@@ -111,7 +111,6 @@
       padding: 0.75rem;
       overflow: auto;
       -webkit-overflow-scrolling: touch;
-      touch-action: pan-x pan-y;
       max-height: 75vh;
       width: 100%;
       box-sizing: border-box;
@@ -130,7 +129,15 @@
 
     .canvas-container {
       margin: 0 auto !important;
-      touch-action: pan-x pan-y !important;
+    }
+
+    .gesture-hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.35rem;
     }
 
     .style-controls {
@@ -225,7 +232,6 @@
       <button class="btn btn-secondary" onclick="flipSelectedImage('X')"><i class="fa-solid fa-arrows-left-right"></i> Flip H</button>
       <button class="btn btn-secondary" onclick="flipSelectedImage('Y')"><i class="fa-solid fa-arrows-up-down"></i> Flip V</button>
       
-      <!-- Filter controls with Toggle & Reset -->
       <button class="btn btn-secondary" onclick="applyImageFilter('none')"><i class="fa-solid fa-rotate-left"></i> Original Color</button>
       <button class="btn btn-secondary" onclick="applyImageFilter('grayscale')"><i class="fa-solid fa-circle-half-stroke"></i> B&amp;W (Toggle)</button>
       <button class="btn btn-secondary" onclick="applyImageFilter('sepia')"><i class="fa-solid fa-sun"></i> Sepia (Toggle)</button>
@@ -237,7 +243,9 @@
       </div>
     </div>
 
-    <div class="editor-container">
+    <div class="gesture-hint"><i class="fa-solid fa-hand-pointer"></i> 1-finger to edit / 2-fingers to scroll &amp; pan</div>
+
+    <div class="editor-container" id="studio-editor-container">
       <div class="canvas-wrapper">
         <canvas id="image-studio-canvas"></canvas>
       </div>
@@ -286,7 +294,9 @@
       <button class="btn btn-secondary" id="bold-btn" onclick="toggleBold()"><i class="fa-solid fa-bold"></i></button>
     </div>
 
-    <div class="editor-container" id="editor-container">
+    <div class="gesture-hint"><i class="fa-solid fa-hand-pointer"></i> 1-finger to edit / 2-fingers to scroll &amp; pan</div>
+
+    <div class="editor-container" id="pdf-editor-container">
       <div class="canvas-wrapper">
         <canvas id="pdf-fabric-canvas"></canvas>
       </div>
@@ -455,6 +465,49 @@
     closeConvertWizard();
   }
 
+  /* ==========================================
+     TWO-FINGER SCROLL & PAN GESTURE ATTACHER
+     ========================================== */
+  function attachTwoFingerScroll(fCanvas, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container || !fCanvas) return;
+
+    let touchStartData = null;
+
+    fCanvas.upperCanvasEl.addEventListener('touchstart', (e) => {
+      if (e.touches.length >= 2) {
+        touchStartData = {
+          x1: e.touches[0].clientX,
+          y1: e.touches[0].clientY,
+          scrollLeft: container.scrollLeft,
+          scrollTop: container.scrollTop,
+          windowScrollY: window.scrollY
+        };
+      } else {
+        touchStartData = null;
+      }
+    }, { passive: true });
+
+    fCanvas.upperCanvasEl.addEventListener('touchmove', (e) => {
+      if (e.touches.length >= 2 && touchStartData) {
+        e.preventDefault();
+        const deltaX = e.touches[0].clientX - touchStartData.x1;
+        const deltaY = e.touches[0].clientY - touchStartData.y1;
+
+        // Pan horizontal & vertical container
+        container.scrollLeft = touchStartData.scrollLeft - deltaX;
+        container.scrollTop = touchStartData.scrollTop - deltaY;
+
+        // Also permit gentle window vertical scrolling
+        window.scrollTo(0, touchStartData.windowScrollY - (deltaY * 0.5));
+      }
+    }, { passive: false });
+
+    fCanvas.upperCanvasEl.addEventListener('touchend', (e) => {
+      if (e.touches.length < 2) touchStartData = null;
+    }, { passive: true });
+  }
+
   /* Single Conversion Wizard */
   function openConvertWizard(targetFormat) {
     if (!currentFiles.length) return;
@@ -541,6 +594,8 @@
       backgroundColor: '#ffffff',
       allowTouchScrolling: true
     });
+
+    attachTwoFingerScroll(studioCanvas, 'studio-editor-container');
 
     let offsetX = 30, offsetY = 30;
     files.forEach((file) => {
@@ -657,7 +712,7 @@
     pageIndicator.textContent = `Page ${num} of ${totalPages}`;
     const page = await pdfDoc.getPage(num);
 
-    const container = document.getElementById('editor-container');
+    const container = document.getElementById('pdf-editor-container');
     const availableWidth = Math.min(window.innerWidth - 32, (container.clientWidth || 700) - 24);
     const baseViewport = page.getViewport({ scale: 1.0 });
 
@@ -687,6 +742,8 @@
 
     fabricCanvas.setWidth(displayWidth);
     fabricCanvas.setHeight(displayHeight);
+
+    attachTwoFingerScroll(fabricCanvas, 'pdf-editor-container');
 
     fabric.Image.fromURL(bgCanvas.toDataURL('image/png'), (img) => {
       img.set({
