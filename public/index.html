@@ -81,10 +81,11 @@
     .btn-primary { background: var(--primary); color: #fff; }
     .btn-secondary { background: #f1f5f9; color: var(--text); border: 1px solid var(--border); }
     .btn-secondary:hover { background: #e2e8f0; }
+    .btn-secondary.active { background: var(--primary); color: #fff; }
     .btn-danger { background: var(--danger); color: #fff; }
     .btn-success { background: var(--success); color: #fff; }
 
-    /* Mobile Responsive Editor Viewport */
+    /* Editor Viewport */
     .editor-container {
       position: relative;
       margin-top: 1rem;
@@ -107,6 +108,41 @@
     }
     .canvas-container {
       margin: 0 auto !important;
+    }
+
+    /* Style Controls Toolbar */
+    .style-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      background: #f8fafc;
+      padding: 0.5rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-top: 0.5rem;
+    }
+    .style-controls label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .style-controls input[type="color"] {
+      border: none;
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      cursor: pointer;
+      background: none;
+    }
+    .style-controls select {
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      font-size: 0.8rem;
     }
   </style>
 </head>
@@ -138,11 +174,8 @@
   <!-- CONVERT SECTION -->
   <div class="section" id="convert-section">
     <h3><i class="fa-solid fa-repeat" style="color: var(--primary);"></i> Convert Document</h3>
-    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
-      Select an output format:
-    </p>
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Select an output format:</p>
 
-    <!-- Documents -->
     <div class="category-group">
       <div class="category-label"><i class="fa-regular fa-file-lines"></i> Word & Documents</div>
       <div class="btn-row">
@@ -155,7 +188,6 @@
       </div>
     </div>
 
-    <!-- Web & E-Books -->
     <div class="category-group">
       <div class="category-label"><i class="fa-solid fa-book-open"></i> E-Books & Web</div>
       <div class="btn-row">
@@ -164,7 +196,6 @@
       </div>
     </div>
 
-    <!-- Images -->
     <div class="category-group">
       <div class="category-label"><i class="fa-solid fa-images"></i> Images</div>
       <div class="btn-row">
@@ -177,16 +208,43 @@
   <!-- PDF LIVE EDITOR -->
   <div class="section" id="edit-section">
     <h3><i class="fa-solid fa-pen-nib" style="color: var(--primary);"></i> Live PDF Editor</h3>
-    <div class="btn-row">
-      <button class="btn btn-secondary" onclick="addEditableText()"><i class="fa-solid fa-font"></i> Add Text</button>
-      <label class="btn btn-secondary" style="cursor: pointer; margin: 0;">
-        <i class="fa-solid fa-image"></i> Add Image
-        <input type="file" id="img-loader" accept="image/*" style="display: none;">
-      </label>
-      <button class="btn btn-secondary" onclick="deleteSelectedObject()"><i class="fa-solid fa-eraser"></i> Delete Selected</button>
+    
+    <!-- Multi-Page Navigation Bar -->
+    <div class="btn-row" style="margin-bottom: 0.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem;">
+      <button class="btn btn-secondary" id="prev-page-btn" onclick="prevPage()"><i class="fa-solid fa-chevron-left"></i> Prev</button>
+      <span id="page-indicator" style="font-weight: 700; font-size: 0.85rem; color: var(--text);">Page 1 of 1</span>
+      <button class="btn btn-secondary" id="next-page-btn" onclick="nextPage()">Next <i class="fa-solid fa-chevron-right"></i></button>
       <button class="btn btn-success" style="margin-left: auto;" id="save-pdf-btn" onclick="saveEditedPDF()">
         <i class="fa-solid fa-download"></i> Save & Download
       </button>
+    </div>
+
+    <!-- Tools Row -->
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="addEditableText()"><i class="fa-solid fa-font"></i> Text</button>
+      <button class="btn btn-secondary" id="draw-btn" onclick="toggleDrawingMode()"><i class="fa-solid fa-signature"></i> Draw / Sign</button>
+      <button class="btn btn-secondary" onclick="addRectangle()"><i class="fa-regular fa-square"></i> Rectangle</button>
+      <button class="btn btn-secondary" onclick="addLine()"><i class="fa-solid fa-minus"></i> Line</button>
+      <label class="btn btn-secondary" style="cursor: pointer; margin: 0;">
+        <i class="fa-solid fa-image"></i> Image
+        <input type="file" id="img-loader" accept="image/*" style="display: none;">
+      </label>
+      <button class="btn btn-danger" onclick="deleteSelectedObject()"><i class="fa-solid fa-eraser"></i> Delete</button>
+    </div>
+
+    <!-- Text & Drawing Style Properties -->
+    <div class="style-controls">
+      <label><i class="fa-solid fa-palette"></i> Color: <input type="color" id="tool-color" value="#000000" onchange="updateObjectColor(this.value)"></label>
+      <label><i class="fa-solid fa-text-height"></i> Size: 
+        <select id="tool-size" onchange="updateFontSize(this.value)">
+          <option value="14">14px</option>
+          <option value="18" selected>18px</option>
+          <option value="24">24px</option>
+          <option value="32">32px</option>
+          <option value="48">48px</option>
+        </select>
+      </label>
+      <button class="btn btn-secondary" id="bold-btn" onclick="toggleBold()"><i class="fa-solid fa-bold"></i></button>
     </div>
 
     <div class="editor-container" id="editor-container">
@@ -202,6 +260,10 @@
 
   let currentFile = null;
   let fabricCanvas = null;
+  let pdfDoc = null;
+  let currentPageNum = 1;
+  let totalPages = 1;
+  let pageAnnotations = {}; // Store canvas objects per page
 
   const dropzone = document.getElementById('dropzone');
   const fileInput = document.getElementById('file-input');
@@ -213,6 +275,8 @@
   const editSection = document.getElementById('edit-section');
   const imgLoader = document.getElementById('img-loader');
   const savePdfBtn = document.getElementById('save-pdf-btn');
+  const pageIndicator = document.getElementById('page-indicator');
+  const drawBtn = document.getElementById('draw-btn');
 
   ['dragenter', 'dragover'].forEach(n => dropzone.addEventListener(n, (e) => { e.preventDefault(); dropzone.classList.add('drag-over'); }));
   ['dragleave', 'drop'].forEach(n => dropzone.addEventListener(n, (e) => { e.preventDefault(); dropzone.classList.remove('drag-over'); }));
@@ -237,7 +301,9 @@
 
     if (isPdf) {
       editSection.style.display = 'block';
-      loadPdfIntoEditor(file);
+      currentPageNum = 1;
+      pageAnnotations = {};
+      loadPdf(file);
     } else {
       editSection.style.display = 'none';
     }
@@ -247,6 +313,9 @@
 
   function resetAll() {
     currentFile = null;
+    pdfDoc = null;
+    currentPageNum = 1;
+    pageAnnotations = {};
     fileInput.value = '';
     imgLoader.value = '';
     if (fabricCanvas) { fabricCanvas.dispose(); fabricCanvas = null; }
@@ -277,16 +346,29 @@
     }
   }
 
-  async function loadPdfIntoEditor(file) {
+  async function loadPdf(file) {
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument(new Uint8Array(arrayBuffer)).promise;
-    const page = await pdf.getPage(1);
+    pdfDoc = await pdfjsLib.getDocument(new Uint8Array(arrayBuffer)).promise;
+    totalPages = pdfDoc.numPages;
+    renderPage(currentPageNum);
+  }
+
+  function saveCurrentPageAnnotations() {
+    if (!fabricCanvas) return;
+    pageAnnotations[currentPageNum] = fabricCanvas.getObjects().map(obj => obj.toObject(['type', 'text', 'fontSize', 'fill', 'stroke', 'strokeWidth', 'fontWeight']));
+  }
+
+  async function renderPage(num) {
+    if (!pdfDoc) return;
+    saveCurrentPageAnnotations();
+
+    pageIndicator.textContent = `Page ${num} of ${totalPages}`;
+    const page = await pdfDoc.getPage(num);
 
     const baseViewport = page.getViewport({ scale: 1.0 });
     const container = document.getElementById('editor-container');
     const availableWidth = Math.min(window.innerWidth - 64, (container.clientWidth || 700) - 32);
     
-    // Scale proportionally to fit mobile width without overflowing
     const calculatedScale = Math.min(availableWidth / baseViewport.width, 1.2);
     const viewport = page.getViewport({ scale: Math.max(calculatedScale, 0.45) });
 
@@ -300,22 +382,117 @@
     if (fabricCanvas) fabricCanvas.dispose();
     fabricCanvas = new fabric.Canvas('pdf-fabric-canvas', { 
       width: viewport.width, 
-      height: viewport.height 
+      height: viewport.height,
+      isDrawingMode: false
     });
 
     fabric.Image.fromURL(bgCanvas.toDataURL(), (img) => {
-      fabricCanvas.setBackgroundImage(img, fabricCanvas.renderAll.bind(fabricCanvas));
+      fabricCanvas.setBackgroundImage(img, () => {
+        fabricCanvas.renderAll();
+        // Restore existing annotations for this page if available
+        if (pageAnnotations[num] && pageAnnotations[num].length) {
+          fabric.util.enlivenObjects(pageAnnotations[num], (enlivenedObjects) => {
+            enlivenedObjects.forEach((obj) => fabricCanvas.add(obj));
+            fabricCanvas.renderAll();
+          });
+        }
+      });
     });
+
+    drawBtn.classList.remove('active');
   }
 
+  function prevPage() {
+    if (currentPageNum <= 1) return;
+    currentPageNum--;
+    renderPage(currentPageNum);
+  }
+
+  function nextPage() {
+    if (currentPageNum >= totalPages) return;
+    currentPageNum++;
+    renderPage(currentPageNum);
+  }
+
+  /* Annotation Creation Tools */
   function addEditableText() {
     if (!fabricCanvas) return;
+    const color = document.getElementById('tool-color').value;
+    const size = parseInt(document.getElementById('tool-size').value, 10);
     const text = new fabric.IText('Type here...', {
-      left: 20, top: 20, fontSize: 18, fill: '#000000',
+      left: 30, top: 30, fontSize: size, fill: color,
       cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false
     });
     fabricCanvas.add(text);
     fabricCanvas.setActiveObject(text);
+  }
+
+  function toggleDrawingMode() {
+    if (!fabricCanvas) return;
+    fabricCanvas.isDrawingMode = !fabricCanvas.isDrawingMode;
+    if (fabricCanvas.isDrawingMode) {
+      drawBtn.classList.add('active');
+      fabricCanvas.freeDrawingBrush.color = document.getElementById('tool-color').value;
+      fabricCanvas.freeDrawingBrush.width = 3;
+    } else {
+      drawBtn.classList.remove('active');
+    }
+  }
+
+  function addRectangle() {
+    if (!fabricCanvas) return;
+    const color = document.getElementById('tool-color').value;
+    const rect = new fabric.Rect({
+      left: 50, top: 50, width: 100, height: 60,
+      fill: 'transparent', stroke: color, strokeWidth: 2,
+      cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false
+    });
+    fabricCanvas.add(rect);
+    fabricCanvas.setActiveObject(rect);
+  }
+
+  function addLine() {
+    if (!fabricCanvas) return;
+    const color = document.getElementById('tool-color').value;
+    const line = new fabric.Line([50, 50, 200, 50], {
+      stroke: color, strokeWidth: 3,
+      cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false
+    });
+    fabricCanvas.add(line);
+    fabricCanvas.setActiveObject(line);
+  }
+
+  /* Styling Adjustments */
+  function updateObjectColor(color) {
+    if (!fabricCanvas) return;
+    if (fabricCanvas.isDrawingMode) {
+      fabricCanvas.freeDrawingBrush.color = color;
+    }
+    const active = fabricCanvas.getActiveObject();
+    if (active) {
+      if (active.type === 'i-text' || active.type === 'text') active.set('fill', color);
+      else active.set('stroke', color);
+      fabricCanvas.renderAll();
+    }
+  }
+
+  function updateFontSize(size) {
+    if (!fabricCanvas) return;
+    const active = fabricCanvas.getActiveObject();
+    if (active && (active.type === 'i-text' || active.type === 'text')) {
+      active.set('fontSize', parseInt(size, 10));
+      fabricCanvas.renderAll();
+    }
+  }
+
+  function toggleBold() {
+    if (!fabricCanvas) return;
+    const active = fabricCanvas.getActiveObject();
+    if (active && (active.type === 'i-text' || active.type === 'text')) {
+      const isBold = active.fontWeight === 'bold';
+      active.set('fontWeight', isBold ? 'normal' : 'bold');
+      fabricCanvas.renderAll();
+    }
   }
 
   imgLoader.addEventListener('change', (e) => {
@@ -346,41 +523,46 @@
     }
   });
 
+  /* PDF Apply Edits & Save */
   async function saveEditedPDF() {
     if (!fabricCanvas || !currentFile) return;
+    saveCurrentPageAnnotations();
     const origHtml = savePdfBtn.innerHTML;
 
     try {
       savePdfBtn.disabled = true;
       savePdfBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
 
-      const objects = fabricCanvas.getObjects();
       const annotations = [];
 
-      for (const obj of objects) {
-        if (obj.type === 'i-text' || obj.type === 'text') {
-          annotations.push({
-            type: 'text',
-            pageIndex: 0,
-            text: obj.text,
-            x: obj.left,
-            y: obj.top,
-            fontSize: obj.fontSize * (obj.scaleY || 1),
-            canvasWidth: fabricCanvas.width,
-            canvasHeight: fabricCanvas.height
-          });
-        } else if (obj.type === 'image') {
-          annotations.push({
-            type: 'image',
-            pageIndex: 0,
-            x: obj.left,
-            y: obj.top,
-            width: obj.getScaledWidth(),
-            height: obj.getScaledHeight(),
-            imageData: obj.toDataURL(),
-            canvasWidth: fabricCanvas.width,
-            canvasHeight: fabricCanvas.height
-          });
+      // Loop through all edited pages
+      for (const [pageNum, objects] of Object.entries(pageAnnotations)) {
+        for (const obj of objects) {
+          if (obj.type === 'i-text' || obj.type === 'text') {
+            annotations.push({
+              type: 'text',
+              pageIndex: parseInt(pageNum, 10) - 1,
+              text: obj.text,
+              x: obj.left,
+              y: obj.top,
+              fontSize: obj.fontSize * (obj.scaleY || 1),
+              canvasWidth: fabricCanvas.width,
+              canvasHeight: fabricCanvas.height
+            });
+          } else if (obj.type === 'image' || obj.type === 'path' || obj.type === 'rect' || obj.type === 'line') {
+            // For drawn signatures, lines, and shapes: capture rendered visual overlay
+            annotations.push({
+              type: 'image',
+              pageIndex: parseInt(pageNum, 10) - 1,
+              x: obj.left,
+              y: obj.top,
+              width: (obj.width || 100) * (obj.scaleX || 1),
+              height: (obj.height || 100) * (obj.scaleY || 1),
+              imageData: obj.toDataURL ? obj.toDataURL() : null,
+              canvasWidth: fabricCanvas.width,
+              canvasHeight: fabricCanvas.height
+            });
+          }
         }
       }
 
