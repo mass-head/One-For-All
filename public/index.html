@@ -202,8 +202,11 @@
       <button class="btn btn-secondary" onclick="rotateSelectedImage(90)"><i class="fa-solid fa-rotate-right"></i> Rotate 90°</button>
       <button class="btn btn-secondary" onclick="flipSelectedImage('X')"><i class="fa-solid fa-arrows-left-right"></i> Flip H</button>
       <button class="btn btn-secondary" onclick="flipSelectedImage('Y')"><i class="fa-solid fa-arrows-up-down"></i> Flip V</button>
-      <button class="btn btn-secondary" onclick="applyImageFilter('grayscale')"><i class="fa-solid fa-circle-half-stroke"></i> B&amp;W</button>
-      <button class="btn btn-secondary" onclick="applyImageFilter('sepia')"><i class="fa-solid fa-sun"></i> Sepia</button>
+      
+      <!-- Filter controls with Toggle & Reset -->
+      <button class="btn btn-secondary" onclick="applyImageFilter('none')"><i class="fa-solid fa-rotate-left"></i> Original Color</button>
+      <button class="btn btn-secondary" onclick="applyImageFilter('grayscale')"><i class="fa-solid fa-circle-half-stroke"></i> B&amp;W (Toggle)</button>
+      <button class="btn btn-secondary" onclick="applyImageFilter('sepia')"><i class="fa-solid fa-sun"></i> Sepia (Toggle)</button>
       <button class="btn btn-danger" onclick="deleteStudioSelected()"><i class="fa-solid fa-trash-can"></i> Delete</button>
       
       <div style="margin-left: auto; display: flex; gap: 0.4rem;">
@@ -572,15 +575,22 @@
   function applyImageFilter(type) {
     if (!studioCanvas) return;
     const active = studioCanvas.getActiveObject();
-    if (active && active.type === 'image') {
-      if (type === 'grayscale') {
-        active.filters.push(new fabric.Image.filters.Grayscale());
-      } else if (type === 'sepia') {
-        active.filters.push(new fabric.Image.filters.Sepia());
-      }
-      active.applyFilters();
-      studioCanvas.renderAll();
+    if (!active || active.type !== 'image') return;
+
+    if (!active.filters) active.filters = [];
+
+    if (type === 'none') {
+      active.filters = [];
+    } else if (type === 'grayscale') {
+      const hasGrayscale = active.filters.some(f => f instanceof fabric.Image.filters.Grayscale);
+      active.filters = hasGrayscale ? [] : [new fabric.Image.filters.Grayscale()];
+    } else if (type === 'sepia') {
+      const hasSepia = active.filters.some(f => f instanceof fabric.Image.filters.Sepia);
+      active.filters = hasSepia ? [] : [new fabric.Image.filters.Sepia()];
     }
+
+    active.applyFilters();
+    studioCanvas.renderAll();
   }
 
   function deleteStudioSelected() {
