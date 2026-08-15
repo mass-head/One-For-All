@@ -27,8 +27,8 @@ const TEMP_DIR = path.join(__dirname, 'temp_uploads');
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 
 app.use(cors());
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+app.use(express.json({ limit: '150mb' }));
+app.use(express.urlencoded({ extended: true, limit: '150mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Storage configuration
@@ -42,7 +42,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 100 * 1024 * 1024 } // 100MB
+  limits: { fileSize: 100 * 1024 * 1024 }
 });
 
 const cleanupFiles = (...filePaths) => {
@@ -53,7 +53,6 @@ const cleanupFiles = (...filePaths) => {
   });
 };
 
-// Helper: Hex color to pdf-lib rgb
 const hexToRgb = (hex) => {
   if (!hex || typeof hex !== 'string') return rgb(0, 0, 0);
   const cleanHex = hex.replace('#', '');
@@ -64,7 +63,6 @@ const hexToRgb = (hex) => {
   return rgb(r, g, b);
 };
 
-// Binary resolver for LibreOffice
 const getSofficeBinary = () => {
   if (process.platform === 'win32') {
     const winPaths = [
@@ -79,7 +77,6 @@ const getSofficeBinary = () => {
   return 'soffice';
 };
 
-// Filter resolver for office document formats
 const getConversionParams = (inputExt, targetExt) => {
   let inFilter = '';
   let outFilter = targetExt;
@@ -106,7 +103,7 @@ const getConversionParams = (inputExt, targetExt) => {
 };
 
 // ==========================================
-// UNIVERSAL CONVERSION ENDPOINT
+// 1. SINGLE FILE CONVERSION ENDPOINT
 // ==========================================
 app.post('/api/convert', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
@@ -126,7 +123,7 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
   try {
     const fileBytes = fs.readFileSync(inputPath);
 
-    // --- CASE 1: PDF -> TXT & PDF -> HTML (Pure Node Extraction) ---
+    // PDF -> TXT / HTML
     if (originalExt === 'pdf' && (cleanTargetExt === 'txt' || cleanTargetExt === 'html')) {
       const parsedData = await pdfParse(fileBytes);
       cleanupFiles(inputPath);
@@ -168,7 +165,7 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
       }
     }
 
-    // --- CASE 2: Image -> PDF (Pure Node Embedding) ---
+    // Image -> PDF
     if (['png', 'jpg', 'jpeg', 'webp'].includes(originalExt) && cleanTargetExt === 'pdf') {
       const pdfDoc = await PDFDocument.create();
       let img;
@@ -190,7 +187,7 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
       return res.send(Buffer.from(pdfBytes));
     }
 
-    // --- CASE 3: Image -> Image (Sharp) ---
+    // Image -> Image (Sharp)
     if (['png', 'jpg', 'jpeg', 'webp'].includes(originalExt) && ['png', 'jpg', 'jpeg', 'webp'].includes(cleanTargetExt)) {
       const targetFormatName = cleanTargetExt === 'jpg' ? 'jpeg' : cleanTargetExt;
       const convertedBuffer = await sharp(fileBytes).toFormat(targetFormatName).toBuffer();
@@ -201,7 +198,7 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
       return res.send(convertedBuffer);
     }
 
-    // --- CASE 4: TXT -> PDF (Pure Node Generation) ---
+    // TXT -> PDF
     if (originalExt === 'txt' && cleanTargetExt === 'pdf') {
       const textContent = fs.readFileSync(inputPath, 'utf8');
       const pdfDoc = await PDFDocument.create();
@@ -228,7 +225,7 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
       return res.send(Buffer.from(pdfBytes));
     }
 
-    // --- CASE 5: All Other Formats via LibreOffice ---
+    // LibreOffice Conversion
     const { inFilter, outFilter } = getConversionParams(originalExt, cleanTargetExt);
     const cmd = `${sofficeBin} --headless ${inFilter} --convert-to ${outFilter} "${inputPath}" --outdir "${TEMP_DIR}"`;
     await execPromise(cmd);
@@ -254,7 +251,49 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
 });
 
 // ==========================================
-// PDF LIVE EDIT ENDPOINT
+// 2. BATCH MULTI-IMAGE MERGE TO SINGLE PDF
+// ==========================================
+app.post('/api/batch/merge-images-pdf', upload.array('files', 50), async (req, res) => {
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({ error: 'No images provided for batch merging.' });
+  }
+
+  const uploadedPaths = req.files.map(f => f.path);
+
+  try {
+    const pdfDoc = await PDFDocument.create();
+
+    for (const file of req.files) {
+      const fileBytes = fs.readFileSync(file.path);
+      const ext = path.extname(file.originalname).replace(/^\./, '').toLowerCase();
+      let img;
+
+      if (ext === 'png') {
+        img = await pdfDoc.embedPng(fileBytes);
+      } else {
+        const jpegBuffer = await sharp(fileBytes).jpeg().toBuffer();
+        img = await pdfDoc.embedJpg(jpegBuffer);
+      }
+
+      const page = pdfDoc.addPage([img.width, img.height]);
+      page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
+    }
+
+    const mergedPdfBytes = await pdfDoc.save();
+    cleanupFiles(...uploadedPaths);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="merged_images.pdf"');
+    res.send(Buffer.from(mergedPdfBytes));
+  } catch (err) {
+    console.error('Batch Image Merge Error:', err);
+    cleanupFiles(...uploadedPaths);
+    res.status(500).json({ error: 'Failed to merge images into PDF.' });
+  }
+});
+
+// ==========================================
+// 3. PDF LIVE EDIT ENDPOINT
 // ==========================================
 app.post('/api/pdf/apply-edits', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No PDF uploaded.' });
@@ -280,7 +319,6 @@ app.post('/api/pdf/apply-edits', upload.single('file'), async (req, res) => {
       const scaleX = item.canvasWidth ? (pdfWidth / item.canvasWidth) : 1;
       const scaleY = item.canvasHeight ? (pdfHeight / item.canvasHeight) : 1;
 
-      // 1. Text Items
       if (item.type === 'text' && item.text) {
         const fontSize = Math.max(6, (parseFloat(item.fontSize) || 16) * scaleY);
         const posX = Math.max(0, (parseFloat(item.x) || 0) * scaleX);
@@ -297,7 +335,6 @@ app.post('/api/pdf/apply-edits', upload.single('file'), async (req, res) => {
         });
       }
 
-      // 2. Images, Whiteout Boxes, Shapes, & Drawings
       if (item.type === 'image' && item.imageData) {
         const posX = Math.max(0, (parseFloat(item.x) || 0) * scaleX);
         const imgWidth = (parseFloat(item.width) || 100) * scaleX;

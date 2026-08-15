@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="google-site-verification" content="mScHiByQ7z8eloaRqfYeMdHdgGnksGW3R-TH-0r-zWY" />
-  <title>One For All - Document Converter &amp; PDF Live Editor</title>
+  <title>One For All - Document Converter, Multi-Image Studio &amp; PDF Live Editor</title>
   
   <link rel="icon" type="image/svg+xml" href="https://play-lh.googleusercontent.com/08uGk8dP-ivoDsyh9Fx6ctbbVBVlWJkiP0H3snzoDJElGNiJ1IoSsChftOG5ORCJMg">
   <link rel="apple-touch-icon" href="https://play-lh.googleusercontent.com/08uGk8dP-ivoDsyh9Fx6ctbbVBVlWJkiP0H3snzoDJElGNiJ1IoSsChftOG5ORCJMg">
@@ -31,7 +31,7 @@
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background-color: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 1.5rem 1rem; }
-    .container { width: 100%; max-width: 960px; margin: 0 auto; }
+    .container { width: 100%; max-width: 980px; margin: 0 auto; }
 
     header { text-align: center; margin-bottom: 1.5rem; }
     header h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 800; color: var(--primary); margin-bottom: 0.25rem; }
@@ -47,7 +47,7 @@
     .dropzone i.upload-icon { font-size: 3rem; color: var(--primary); margin-bottom: 0.75rem; }
     .dropzone input[type="file"] { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 
-    /* Active File Header */
+    /* File List Bar */
     .file-bar {
       display: none; align-items: center; justify-content: space-between;
       background: var(--card); padding: 0.85rem 1.2rem; border-radius: var(--radius);
@@ -79,14 +79,9 @@
     .btn-danger { background: var(--danger); color: #fff; }
     .btn-success { background: var(--success); color: #fff; }
 
-    .btn-convert { position: relative; }
     .btn-convert:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-      pointer-events: none;
-      background: #f1f5f9 !important;
-      color: #94a3b8 !important;
-      border-color: #e2e8f0 !important;
+      opacity: 0.4; cursor: not-allowed; pointer-events: none;
+      background: #f1f5f9 !important; color: #94a3b8 !important; border-color: #e2e8f0 !important;
     }
 
     /* Modal Wizard */
@@ -130,14 +125,15 @@
 <div class="container">
   <header>
     <h1>One For All</h1>
-    <p>Convert documents, e-books, images, or edit PDF content live</p>
+    <p>Convert files, edit multi-image collages, or edit PDF pages live</p>
   </header>
 
+  <!-- Upload Box -->
   <div class="dropzone" id="dropzone">
     <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
-    <h3>Choose a file or drag & drop it here</h3>
-    <p>Supports PDF, DOCX, DOC, ODT, RTF, EPUB, TXT, HTML, JPG, PNG</p>
-    <input type="file" id="file-input">
+    <h3>Choose file(s) or drag &amp; drop here</h3>
+    <p>Supports PDF, DOCX, DOC, ODT, RTF, EPUB, TXT, HTML, JPG, PNG, WEBP (Single or Multiple)</p>
+    <input type="file" id="file-input" multiple>
   </div>
 
   <div class="file-bar" id="file-bar">
@@ -146,7 +142,16 @@
       <span id="file-name">document.pdf</span>
     </div>
     <button class="btn btn-danger" id="delete-file-btn">
-      <i class="fa-solid fa-trash-can"></i> Remove File
+      <i class="fa-solid fa-trash-can"></i> Clear Files
+    </button>
+  </div>
+
+  <!-- BATCH MERGE SECTION (Shown when 2+ files uploaded) -->
+  <div class="section" id="batch-section">
+    <h3><i class="fa-solid fa-layer-group" style="color: var(--primary);"></i> Batch Actions</h3>
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">You selected multiple files. You can combine them into a single PDF document:</p>
+    <button class="btn btn-primary" id="batch-pdf-btn" onclick="executeBatchPdfMerge()">
+      <i class="fa-solid fa-file-pdf"></i> Combine All Images into One PDF
     </button>
   </div>
 
@@ -158,7 +163,7 @@
     </p>
 
     <div class="category-group">
-      <div class="category-label"><i class="fa-regular fa-file-lines"></i> Word & Documents</div>
+      <div class="category-label"><i class="fa-regular fa-file-lines"></i> Word &amp; Documents</div>
       <div class="btn-row">
         <button class="btn btn-secondary btn-convert" data-format="pdf" onclick="openConvertWizard('pdf')"><i class="fa-solid fa-file-pdf"></i> PDF</button>
         <button class="btn btn-secondary btn-convert" data-format="docx" onclick="openConvertWizard('docx')"><i class="fa-solid fa-file-word"></i> DOCX</button>
@@ -170,7 +175,7 @@
     </div>
 
     <div class="category-group">
-      <div class="category-label"><i class="fa-solid fa-book-open"></i> E-Books & Web</div>
+      <div class="category-label"><i class="fa-solid fa-book-open"></i> E-Books &amp; Web</div>
       <div class="btn-row">
         <button class="btn btn-secondary btn-convert" data-format="epub" onclick="openConvertWizard('epub')"><i class="fa-solid fa-book"></i> EPUB</button>
         <button class="btn btn-secondary btn-convert" data-format="html" onclick="openConvertWizard('html')"><i class="fa-solid fa-code"></i> HTML</button>
@@ -186,6 +191,34 @@
     </div>
   </div>
 
+  <!-- MULTI-IMAGE STUDIO / EDITOR -->
+  <div class="section" id="image-studio-section">
+    <h3><i class="fa-solid fa-wand-magic-sparkles" style="color: var(--primary);"></i> Image Studio &amp; Collage Editor</h3>
+    <div class="btn-row">
+      <label class="btn btn-secondary" style="cursor: pointer; margin: 0;">
+        <i class="fa-solid fa-plus"></i> Add More Images
+        <input type="file" id="studio-add-img" accept="image/*" multiple style="display: none;">
+      </label>
+      <button class="btn btn-secondary" onclick="rotateSelectedImage(90)"><i class="fa-solid fa-rotate-right"></i> Rotate 90°</button>
+      <button class="btn btn-secondary" onclick="flipSelectedImage('X')"><i class="fa-solid fa-arrows-left-right"></i> Flip H</button>
+      <button class="btn btn-secondary" onclick="flipSelectedImage('Y')"><i class="fa-solid fa-arrows-up-down"></i> Flip V</button>
+      <button class="btn btn-secondary" onclick="applyImageFilter('grayscale')"><i class="fa-solid fa-circle-half-stroke"></i> B&amp;W</button>
+      <button class="btn btn-secondary" onclick="applyImageFilter('sepia')"><i class="fa-solid fa-sun"></i> Sepia</button>
+      <button class="btn btn-danger" onclick="deleteStudioSelected()"><i class="fa-solid fa-trash-can"></i> Delete</button>
+      
+      <div style="margin-left: auto; display: flex; gap: 0.4rem;">
+        <button class="btn btn-success" onclick="exportStudioImage('png')"><i class="fa-solid fa-download"></i> Save PNG</button>
+        <button class="btn btn-success" onclick="exportStudioImage('jpeg')"><i class="fa-solid fa-download"></i> Save JPG</button>
+      </div>
+    </div>
+
+    <div class="editor-container">
+      <div class="canvas-wrapper">
+        <canvas id="image-studio-canvas"></canvas>
+      </div>
+    </div>
+  </div>
+
   <!-- PDF LIVE EDITOR -->
   <div class="section" id="edit-section">
     <h3><i class="fa-solid fa-pen-nib" style="color: var(--primary);"></i> Live PDF Editor</h3>
@@ -195,7 +228,7 @@
       <span id="page-indicator" style="font-weight: 700; font-size: 0.85rem; color: var(--text);">Page 1 of 1</span>
       <button class="btn btn-secondary" id="next-page-btn" onclick="nextPage()">Next <i class="fa-solid fa-chevron-right"></i></button>
       <button class="btn btn-success" style="margin-left: auto;" id="save-pdf-btn" onclick="saveEditedPDF()">
-        <i class="fa-solid fa-download"></i> Save & Download
+        <i class="fa-solid fa-download"></i> Save &amp; Download
       </button>
     </div>
 
@@ -260,15 +293,15 @@
 <script>
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-  let currentFile = null;
+  let currentFiles = [];
   let fabricCanvas = null;
+  let studioCanvas = null;
   let pdfDoc = null;
   let currentPageNum = 1;
   let totalPages = 1;
   let pageAnnotations = {};
   let selectedTargetFormat = null;
 
-  // Supported conversion mapping per input extension
   const SUPPORTED_CONVERSIONS = {
     'pdf': ['docx', 'doc', 'odt', 'rtf', 'txt', 'html', 'epub'],
     'docx': ['pdf', 'doc', 'odt', 'rtf', 'txt', 'html', 'epub'],
@@ -291,8 +324,11 @@
   const fileIcon = document.getElementById('file-icon');
   const deleteFileBtn = document.getElementById('delete-file-btn');
   const convertSection = document.getElementById('convert-section');
+  const batchSection = document.getElementById('batch-section');
   const editSection = document.getElementById('edit-section');
+  const studioSection = document.getElementById('image-studio-section');
   const imgLoader = document.getElementById('img-loader');
+  const studioAddImg = document.getElementById('studio-add-img');
   const savePdfBtn = document.getElementById('save-pdf-btn');
   const pageIndicator = document.getElementById('page-indicator');
   const drawBtn = document.getElementById('draw-btn');
@@ -306,37 +342,63 @@
   ['dragleave', 'drop'].forEach(n => dropzone.addEventListener(n, (e) => { e.preventDefault(); dropzone.classList.remove('drag-over'); }));
 
   dropzone.addEventListener('drop', (e) => {
-    if (e.dataTransfer.files.length) handleUploadedFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files.length) handleUploadedFiles(Array.from(e.dataTransfer.files));
   });
 
   fileInput.addEventListener('change', (e) => {
-    if (e.target.files.length) handleUploadedFile(e.target.files[0]);
+    if (e.target.files.length) handleUploadedFiles(Array.from(e.target.files));
   });
 
   function getFileExtension(name) {
     return name.substring(name.lastIndexOf('.') + 1).toLowerCase();
   }
 
-  function handleUploadedFile(file) {
-    currentFile = file;
-    fileNameDisplay.textContent = file.name;
+  function handleUploadedFiles(files) {
+    currentFiles = files;
     dropzone.style.display = 'none';
     fileBar.style.display = 'flex';
-    convertSection.style.display = 'block';
 
-    const ext = getFileExtension(file.name);
-    updateAvailableFormats(ext);
+    if (files.length === 1) {
+      const file = files[0];
+      fileNameDisplay.textContent = file.name;
+      const ext = getFileExtension(file.name);
+      updateAvailableFormats(ext);
+      convertSection.style.display = 'block';
+      batchSection.style.display = 'none';
 
-    const isPdf = ext === 'pdf';
-    fileIcon.className = isPdf ? 'fa-solid fa-file-pdf' : 'fa-solid fa-file-lines';
+      const isImage = ['png', 'jpg', 'jpeg', 'webp'].includes(ext);
+      const isPdf = ext === 'pdf';
+      fileIcon.className = isPdf ? 'fa-solid fa-file-pdf' : (isImage ? 'fa-solid fa-image' : 'fa-solid fa-file-lines');
 
-    if (isPdf) {
-      editSection.style.display = 'block';
-      currentPageNum = 1;
-      pageAnnotations = {};
-      loadPdf(file);
+      if (isPdf) {
+        editSection.style.display = 'block';
+        studioSection.style.display = 'none';
+        currentPageNum = 1;
+        pageAnnotations = {};
+        loadPdf(file);
+      } else if (isImage) {
+        editSection.style.display = 'none';
+        studioSection.style.display = 'block';
+        initImageStudio([file]);
+      } else {
+        editSection.style.display = 'none';
+        studioSection.style.display = 'none';
+      }
     } else {
+      // Multi-file batch selection
+      fileNameDisplay.textContent = `${files.length} files selected`;
+      fileIcon.className = 'fa-solid fa-layer-group';
+      convertSection.style.display = 'none';
       editSection.style.display = 'none';
+      batchSection.style.display = 'block';
+
+      const allImages = files.every(f => ['png', 'jpg', 'jpeg', 'webp'].includes(getFileExtension(f.name)));
+      if (allImages) {
+        studioSection.style.display = 'block';
+        initImageStudio(files);
+      } else {
+        studioSection.style.display = 'none';
+      }
     }
   }
 
@@ -344,36 +406,36 @@
     const validTargets = SUPPORTED_CONVERSIONS[srcExt] || [];
     document.querySelectorAll('.btn-convert').forEach((btn) => {
       const target = btn.dataset.format;
-      if (validTargets.includes(target) && target !== srcExt) {
-        btn.disabled = false;
-      } else {
-        btn.disabled = true;
-      }
+      btn.disabled = !(validTargets.includes(target) && target !== srcExt);
     });
   }
 
   deleteFileBtn.addEventListener('click', resetAll);
 
   function resetAll() {
-    currentFile = null;
+    currentFiles = [];
     pdfDoc = null;
     currentPageNum = 1;
     pageAnnotations = {};
     fileInput.value = '';
     imgLoader.value = '';
+    studioAddImg.value = '';
     if (fabricCanvas) { fabricCanvas.dispose(); fabricCanvas = null; }
+    if (studioCanvas) { studioCanvas.dispose(); studioCanvas = null; }
     dropzone.style.display = 'block';
     fileBar.style.display = 'none';
     convertSection.style.display = 'none';
+    batchSection.style.display = 'none';
     editSection.style.display = 'none';
+    studioSection.style.display = 'none';
     closeConvertWizard();
   }
 
-  /* Wizard Functions */
+  /* Single Conversion Wizard */
   function openConvertWizard(targetFormat) {
-    if (!currentFile) return;
+    if (!currentFiles.length) return;
     selectedTargetFormat = targetFormat;
-    const srcExt = getFileExtension(currentFile.name);
+    const srcExt = getFileExtension(currentFiles[0].name);
     
     wizardSrc.textContent = srcExt.toUpperCase();
     wizardDest.textContent = targetFormat.toUpperCase();
@@ -386,14 +448,15 @@
   }
 
   async function executeConversion() {
-    if (!currentFile || !selectedTargetFormat) return;
+    if (!currentFiles.length || !selectedTargetFormat) return;
 
+    const file = currentFiles[0];
     const originalText = wizardStartBtn.innerHTML;
     wizardStartBtn.disabled = true;
     wizardStartBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Converting...';
 
     const formData = new FormData();
-    formData.append('file', currentFile);
+    formData.append('file', file);
     formData.append('targetFormat', selectedTargetFormat);
 
     try {
@@ -403,7 +466,7 @@
         throw new Error(errJson.error || 'Conversion failed.');
       }
       const blob = await res.blob();
-      const baseName = currentFile.name.substring(0, currentFile.name.lastIndexOf('.')) || currentFile.name;
+      const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
       downloadBlob(blob, `${baseName}.${selectedTargetFormat}`);
       closeConvertWizard();
     } catch (err) {
@@ -414,7 +477,136 @@
     }
   }
 
-  /* PDF Editor Engine */
+  /* Batch Merge to PDF */
+  async function executeBatchPdfMerge() {
+    if (!currentFiles.length) return;
+    const btn = document.getElementById('batch-pdf-btn');
+    const origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Merging into PDF...';
+
+    const formData = new FormData();
+    currentFiles.forEach(f => formData.append('files', f));
+
+    try {
+      const res = await fetch('/api/batch/merge-images-pdf', { method: 'POST', body: formData });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to merge files.');
+      }
+      const blob = await res.blob();
+      downloadBlob(blob, 'combined_document.pdf');
+    } catch (e) {
+      alert(`Batch Merge Error: ${e.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
+  }
+
+  /* ==========================================
+     IMAGE STUDIO & COLLAGE ENGINE
+     ========================================== */
+  function initImageStudio(files) {
+    if (studioCanvas) studioCanvas.dispose();
+    const container = document.querySelector('#image-studio-section .editor-container');
+    const canvasWidth = Math.min(window.innerWidth - 32, 800);
+    
+    studioCanvas = new fabric.Canvas('image-studio-canvas', {
+      width: canvasWidth,
+      height: 550,
+      backgroundColor: '#ffffff'
+    });
+
+    let offsetX = 30, offsetY = 30;
+    files.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (f) => {
+        fabric.Image.fromURL(f.target.result, (img) => {
+          img.scaleToWidth(Math.min(220, canvasWidth / 2));
+          img.set({ left: offsetX, top: offsetY, cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false });
+          studioCanvas.add(img);
+          studioCanvas.setActiveObject(img);
+          offsetX = (offsetX + 40) % (canvasWidth - 150);
+          offsetY = (offsetY + 40) % 350;
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  studioAddImg.addEventListener('change', (e) => {
+    if (!studioCanvas || !e.target.files.length) return;
+    Array.from(e.target.files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (f) => {
+        fabric.Image.fromURL(f.target.result, (img) => {
+          img.scaleToWidth(200);
+          img.set({ left: 50, top: 50, cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false });
+          studioCanvas.add(img);
+          studioCanvas.setActiveObject(img);
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  });
+
+  function rotateSelectedImage(deg) {
+    if (!studioCanvas) return;
+    const active = studioCanvas.getActiveObject();
+    if (active) {
+      active.rotate((active.angle + deg) % 360);
+      studioCanvas.renderAll();
+    }
+  }
+
+  function flipSelectedImage(axis) {
+    if (!studioCanvas) return;
+    const active = studioCanvas.getActiveObject();
+    if (active) {
+      if (axis === 'X') active.set('flipX', !active.flipX);
+      if (axis === 'Y') active.set('flipY', !active.flipY);
+      studioCanvas.renderAll();
+    }
+  }
+
+  function applyImageFilter(type) {
+    if (!studioCanvas) return;
+    const active = studioCanvas.getActiveObject();
+    if (active && active.type === 'image') {
+      if (type === 'grayscale') {
+        active.filters.push(new fabric.Image.filters.Grayscale());
+      } else if (type === 'sepia') {
+        active.filters.push(new fabric.Image.filters.Sepia());
+      }
+      active.applyFilters();
+      studioCanvas.renderAll();
+    }
+  }
+
+  function deleteStudioSelected() {
+    if (!studioCanvas) return;
+    const active = studioCanvas.getActiveObject();
+    if (active) studioCanvas.remove(active);
+  }
+
+  function exportStudioImage(format) {
+    if (!studioCanvas) return;
+    const dataUrl = studioCanvas.toDataURL({
+      format: format,
+      quality: 0.95
+    });
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `edited_image.${format === 'jpeg' ? 'jpg' : format}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  /* ==========================================
+     PDF LIVE EDITOR ENGINE
+     ========================================== */
   async function loadPdf(file) {
     const arrayBuffer = await file.arrayBuffer();
     pdfDoc = await pdfjsLib.getDocument(new Uint8Array(arrayBuffer)).promise;
@@ -629,8 +821,9 @@
   });
 
   async function saveEditedPDF() {
-    if (!fabricCanvas || !currentFile) return;
+    if (!fabricCanvas || !currentFiles.length) return;
     saveCurrentPageAnnotations();
+    const file = currentFiles[0];
     const origHtml = savePdfBtn.innerHTML;
 
     try {
@@ -681,7 +874,7 @@
       }
 
       const formData = new FormData();
-      formData.append('file', currentFile);
+      formData.append('file', file);
       formData.append('annotations', JSON.stringify(annotations));
 
       const res = await fetch('/api/pdf/apply-edits', { method: 'POST', body: formData });
@@ -691,7 +884,7 @@
       }
 
       const blob = await res.blob();
-      downloadBlob(blob, `edited_${currentFile.name}`);
+      downloadBlob(blob, `edited_${file.name}`);
     } catch (err) {
       alert(`Could not save PDF edits: ${err.message}`);
     } finally {
