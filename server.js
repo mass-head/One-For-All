@@ -126,16 +126,49 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
   try {
     const fileBytes = fs.readFileSync(inputPath);
 
-    // PDF -> TXT
-    if (originalExt === 'pdf' && cleanTargetExt === 'txt') {
+    // --- CASE 1: PDF -> TXT & PDF -> HTML (Pure Node Extraction) ---
+    if (originalExt === 'pdf' && (cleanTargetExt === 'txt' || cleanTargetExt === 'html')) {
       const parsedData = await pdfParse(fileBytes);
       cleanupFiles(inputPath);
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${originalNameWithoutExt}.txt"`);
-      return res.send(parsedData.text || 'No extractable text found.');
+
+      if (cleanTargetExt === 'txt') {
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${originalNameWithoutExt}.txt"`);
+        return res.send(parsedData.text || 'No extractable text found.');
+      } else {
+        const textBody = (parsedData.text || 'No text extracted')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/\n/g, '<br>\n');
+
+        const htmlOutput = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${originalNameWithoutExt}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; padding: 2rem; max-width: 800px; margin: 0 auto; color: #1e293b; background: #f8fafc; }
+    .content-card { background: #ffffff; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+    h1 { color: #4f46e5; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem; }
+  </style>
+</head>
+<body>
+  <div class="content-card">
+    <h1>${originalNameWithoutExt}</h1>
+    <div>${textBody}</div>
+  </div>
+</body>
+</html>`;
+
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${originalNameWithoutExt}.html"`);
+        return res.send(htmlOutput);
+      }
     }
 
-    // Image -> PDF
+    // --- CASE 2: Image -> PDF (Pure Node Embedding) ---
     if (['png', 'jpg', 'jpeg', 'webp'].includes(originalExt) && cleanTargetExt === 'pdf') {
       const pdfDoc = await PDFDocument.create();
       let img;
@@ -157,7 +190,7 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
       return res.send(Buffer.from(pdfBytes));
     }
 
-    // Image -> Image
+    // --- CASE 3: Image -> Image (Sharp) ---
     if (['png', 'jpg', 'jpeg', 'webp'].includes(originalExt) && ['png', 'jpg', 'jpeg', 'webp'].includes(cleanTargetExt)) {
       const targetFormatName = cleanTargetExt === 'jpg' ? 'jpeg' : cleanTargetExt;
       const convertedBuffer = await sharp(fileBytes).toFormat(targetFormatName).toBuffer();
@@ -168,7 +201,7 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
       return res.send(convertedBuffer);
     }
 
-    // TXT -> PDF
+    // --- CASE 4: TXT -> PDF (Pure Node Generation) ---
     if (originalExt === 'txt' && cleanTargetExt === 'pdf') {
       const textContent = fs.readFileSync(inputPath, 'utf8');
       const pdfDoc = await PDFDocument.create();
@@ -195,7 +228,7 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
       return res.send(Buffer.from(pdfBytes));
     }
 
-    // LibreOffice Conversion
+    // --- CASE 5: All Other Formats via LibreOffice ---
     const { inFilter, outFilter } = getConversionParams(originalExt, cleanTargetExt);
     const cmd = `${sofficeBin} --headless ${inFilter} --convert-to ${outFilter} "${inputPath}" --outdir "${TEMP_DIR}"`;
     await execPromise(cmd);
