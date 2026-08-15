@@ -85,7 +85,7 @@
     .editor-container {
       position: relative;
       margin-top: 1rem;
-      background: #475569;
+      background: #334155;
       border-radius: 8px;
       padding: 1rem;
       overflow-x: auto;
@@ -100,7 +100,6 @@
       background: #ffffff;
       line-height: 0;
       margin: 0 auto;
-      max-width: 100%;
     }
     .canvas-container { margin: 0 auto !important; }
 
@@ -361,35 +360,44 @@
     const page = await pdfDoc.getPage(num);
 
     const container = document.getElementById('editor-container');
-    const availableWidth = Math.min(window.innerWidth - 48, (container.clientWidth || 700) - 32);
+    const availableWidth = Math.min(window.innerWidth - 32, (container.clientWidth || 700) - 24);
     const baseViewport = page.getViewport({ scale: 1.0 });
 
     const displayScale = Math.min(availableWidth / baseViewport.width, 1.2);
-    const displayViewport = page.getViewport({ scale: Math.max(displayScale, 0.45) });
+    const displayWidth = Math.floor(baseViewport.width * Math.max(displayScale, 0.45));
+    const displayHeight = Math.floor(baseViewport.height * Math.max(displayScale, 0.45));
 
-    const dpr = Math.max(window.devicePixelRatio || 1, 2);
-    const renderViewport = page.getViewport({ scale: displayViewport.scale * dpr });
+    // Sharpness multiplier for high-DPI displays
+    const dpr = Math.max(window.devicePixelRatio || 1, 2.5);
+    const renderViewport = page.getViewport({ scale: (displayWidth / baseViewport.width) * dpr });
 
     const bgCanvas = document.createElement('canvas');
-    const ctx = bgCanvas.getContext('2d');
+    const ctx = bgCanvas.getContext('2d', { alpha: false });
     bgCanvas.width = renderViewport.width;
     bgCanvas.height = renderViewport.height;
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
     await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
 
     if (fabricCanvas) fabricCanvas.dispose();
     fabricCanvas = new fabric.Canvas('pdf-fabric-canvas', { 
-      width: displayViewport.width, 
-      height: displayViewport.height,
+      enableRetinaScaling: true,
       isDrawingMode: false
     });
 
-    fabric.Image.fromURL(bgCanvas.toDataURL(), (img) => {
+    fabricCanvas.setWidth(displayWidth);
+    fabricCanvas.setHeight(displayHeight);
+
+    fabric.Image.fromURL(bgCanvas.toDataURL('image/png'), (img) => {
       img.set({
-        scaleX: displayViewport.width / img.width,
-        scaleY: displayViewport.height / img.height,
+        scaleX: displayWidth / img.width,
+        scaleY: displayHeight / img.height,
         originX: 'left',
-        originY: 'top'
+        originY: 'top',
+        selectable: false,
+        evented: false
       });
 
       fabricCanvas.setBackgroundImage(img, () => {
@@ -425,7 +433,7 @@
 
     const whiteoutBox = new fabric.Rect({
       left: 40, top: 40, width: 140, height: size + 10,
-      fill: '#ffffff', stroke: '#e2e8f0', strokeWidth: 1,
+      fill: '#ffffff', stroke: '#cbd5e1', strokeWidth: 1,
       cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false
     });
 
