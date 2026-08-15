@@ -213,7 +213,7 @@
 
     <!-- Tools Row -->
     <div class="btn-row">
-      <button class="btn btn-primary" onclick="addReplaceTextPatch()"><i class="fa-solid fa-eraser"></i> Whiteout &amp; Replace Text</button>
+      <button class="btn btn-primary" onclick="addReplaceTextPatch()"><i class="fa-solid fa-eraser"></i> Whiteout &amp; Replace</button>
       <button class="btn btn-secondary" onclick="addEditableText()"><i class="fa-solid fa-font"></i> Add Text</button>
       <button class="btn btn-secondary" id="draw-btn" onclick="toggleDrawingMode()"><i class="fa-solid fa-signature"></i> Draw / Sign</button>
       <button class="btn btn-secondary" onclick="addRectangle()"><i class="fa-regular fa-square"></i> Rectangle</button>
@@ -350,7 +350,7 @@
 
   function saveCurrentPageAnnotations() {
     if (!fabricCanvas) return;
-    pageAnnotations[currentPageNum] = fabricCanvas.getObjects().map(obj => obj.toObject(['type', 'text', 'fontSize', 'fill', 'stroke', 'strokeWidth', 'fontWeight', 'width', 'height']));
+    pageAnnotations[currentPageNum] = fabricCanvas.getObjects().map(obj => obj.toObject(['type', 'text', 'fontSize', 'fill', 'stroke', 'strokeWidth', 'fontWeight', 'width', 'height', 'path']));
   }
 
   async function renderPage(num) {
@@ -408,20 +408,17 @@
     renderPage(currentPageNum);
   }
 
-  /* NEW: Whiteout & Replace Text Feature */
   function addReplaceTextPatch() {
     if (!fabricCanvas) return;
     const color = document.getElementById('tool-color').value;
     const size = parseInt(document.getElementById('tool-size').value, 10);
 
-    // 1. Whiteout mask box to conceal old data
     const whiteoutBox = new fabric.Rect({
       left: 40, top: 40, width: 140, height: size + 10,
       fill: '#ffffff', stroke: '#e2e8f0', strokeWidth: 1,
       cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false
     });
 
-    // 2. New text to display over it
     const replaceText = new fabric.IText('New text here', {
       left: 45, top: 45, fontSize: size, fill: color,
       cornerColor: '#4f46e5', cornerSize: 8, transparentCorners: false
@@ -560,18 +557,30 @@
               x: obj.left,
               y: obj.top,
               fontSize: obj.fontSize * (obj.scaleY || 1),
+              fill: obj.fill || '#000000',
+              fontWeight: obj.fontWeight || 'normal',
               canvasWidth: fabricCanvas.width,
               canvasHeight: fabricCanvas.height
             });
           } else {
+            const w = Math.max((obj.width || 100) * (obj.scaleX || 1), 10);
+            const h = Math.max((obj.height || 100) * (obj.scaleY || 1), 10);
+            
+            const tempCanvas = new fabric.StaticCanvas(null, { width: w, height: h });
+            const cloned = fabric.util.object.clone(obj);
+            cloned.left = 0;
+            cloned.top = 0;
+            tempCanvas.add(cloned);
+            tempCanvas.renderAll();
+
             annotations.push({
               type: 'image',
               pageIndex: parseInt(pageNum, 10) - 1,
               x: obj.left,
               y: obj.top,
-              width: (obj.width || 100) * (obj.scaleX || 1),
-              height: (obj.height || 100) * (obj.scaleY || 1),
-              imageData: obj.toDataURL ? obj.toDataURL() : null,
+              width: w,
+              height: h,
+              imageData: tempCanvas.toDataURL('image/png'),
               canvasWidth: fabricCanvas.width,
               canvasHeight: fabricCanvas.height
             });

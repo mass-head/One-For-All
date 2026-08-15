@@ -53,6 +53,17 @@ const cleanupFiles = (...filePaths) => {
   });
 };
 
+// Helper: Hex color to pdf-lib rgb
+const hexToRgb = (hex) => {
+  if (!hex || typeof hex !== 'string') return rgb(0, 0, 0);
+  const cleanHex = hex.replace('#', '');
+  if (cleanHex.length !== 6) return rgb(0, 0, 0);
+  const r = parseInt(cleanHex.substring(0, 2), 16) / 255;
+  const g = parseInt(cleanHex.substring(2, 4), 16) / 255;
+  const b = parseInt(cleanHex.substring(4, 6), 16) / 255;
+  return rgb(r, g, b);
+};
+
 // Binary resolver for LibreOffice
 const getSofficeBinary = () => {
   if (process.platform === 'win32') {
@@ -95,7 +106,7 @@ const getConversionParams = (inputExt, targetExt) => {
 };
 
 // ==========================================
-// UNIVERSAL & ROBUST CONVERSION ENDPOINT
+// UNIVERSAL CONVERSION ENDPOINT
 // ==========================================
 app.post('/api/convert', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
@@ -115,7 +126,7 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
   try {
     const fileBytes = fs.readFileSync(inputPath);
 
-    // --- CASE 1: PDF -> TXT (Pure Node Extraction) ---
+    // PDF -> TXT
     if (originalExt === 'pdf' && cleanTargetExt === 'txt') {
       const parsedData = await pdfParse(fileBytes);
       cleanupFiles(inputPath);
@@ -124,14 +135,13 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
       return res.send(parsedData.text || 'No extractable text found.');
     }
 
-    // --- CASE 2: Image -> PDF (Pure Node Embedding) ---
+    // Image -> PDF
     if (['png', 'jpg', 'jpeg', 'webp'].includes(originalExt) && cleanTargetExt === 'pdf') {
       const pdfDoc = await PDFDocument.create();
       let img;
       if (originalExt === 'png') {
         img = await pdfDoc.embedPng(fileBytes);
       } else {
-        // Convert to standard JPEG buffer using Sharp if needed
         const jpegBuffer = await sharp(fileBytes).jpeg().toBuffer();
         img = await pdfDoc.embedJpg(jpegBuffer);
       }
@@ -147,7 +157,7 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
       return res.send(Buffer.from(pdfBytes));
     }
 
-    // --- CASE 3: Image -> Image (PNG/JPG/WEBP Conversion via Sharp) ---
+    // Image -> Image
     if (['png', 'jpg', 'jpeg', 'webp'].includes(originalExt) && ['png', 'jpg', 'jpeg', 'webp'].includes(cleanTargetExt)) {
       const targetFormatName = cleanTargetExt === 'jpg' ? 'jpeg' : cleanTargetExt;
       const convertedBuffer = await sharp(fileBytes).toFormat(targetFormatName).toBuffer();
@@ -158,14 +168,14 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
       return res.send(convertedBuffer);
     }
 
-    // --- CASE 4: TXT / HTML -> PDF (Direct Pure Node Generation) ---
+    // TXT -> PDF
     if (originalExt === 'txt' && cleanTargetExt === 'pdf') {
       const textContent = fs.readFileSync(inputPath, 'utf8');
       const pdfDoc = await PDFDocument.create();
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
       
       const lines = textContent.split(/\r?\n/);
-      let page = pdfDoc.addPage([595.28, 841.89]); // A4
+      let page = pdfDoc.addPage([595.28, 841.89]);
       let y = 800;
 
       for (const line of lines) {
@@ -185,7 +195,7 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
       return res.send(Buffer.from(pdfBytes));
     }
 
-    // --- CASE 5: All Other Office / Doc Formats via LibreOffice ---
+    // LibreOffice Conversion
     const { inFilter, outFilter } = getConversionParams(originalExt, cleanTargetExt);
     const cmd = `${sofficeBin} --headless ${inFilter} --convert-to ${outFilter} "${inputPath}" --outdir "${TEMP_DIR}"`;
     await execPromise(cmd);
@@ -224,7 +234,8 @@ app.post('/api/pdf/apply-edits', upload.single('file'), async (req, res) => {
     
     const pdfDoc = await PDFDocument.load(fileBytes);
     const pages = pdfDoc.getPages();
-    const defaultFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
     for (const item of annotations) {
       const pageIndex = parseInt(item.pageIndex, 10) || 0;
@@ -236,22 +247,24 @@ app.post('/api/pdf/apply-edits', upload.single('file'), async (req, res) => {
       const scaleX = item.canvasWidth ? (pdfWidth / item.canvasWidth) : 1;
       const scaleY = item.canvasHeight ? (pdfHeight / item.canvasHeight) : 1;
 
-      // 1. Draw Text
+      // 1. Text Items
       if (item.type === 'text' && item.text) {
         const fontSize = Math.max(6, (parseFloat(item.fontSize) || 16) * scaleY);
         const posX = Math.max(0, (parseFloat(item.x) || 0) * scaleX);
         const posY = pdfHeight - ((parseFloat(item.y) || 0) * scaleY) - fontSize;
+        const fontToUse = item.fontWeight === 'bold' ? boldFont : regularFont;
+        const textColor = hexToRgb(item.fill || '#000000');
 
         page.drawText(String(item.text), {
           x: posX,
           y: Math.max(0, posY),
           size: fontSize,
-          font: defaultFont,
-          color: rgb(0, 0, 0)
+          font: fontToUse,
+          color: textColor
         });
       }
 
-      // 2. Draw Image
+      // 2. Images, Whiteout Boxes, Shapes, & Drawings
       if (item.type === 'image' && item.imageData) {
         const posX = Math.max(0, (parseFloat(item.x) || 0) * scaleX);
         const imgWidth = (parseFloat(item.width) || 100) * scaleX;
