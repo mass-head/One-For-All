@@ -360,28 +360,38 @@
     pageIndicator.textContent = `Page ${num} of ${totalPages}`;
     const page = await pdfDoc.getPage(num);
 
-    const baseViewport = page.getViewport({ scale: 1.0 });
     const container = document.getElementById('editor-container');
-    const availableWidth = Math.min(window.innerWidth - 64, (container.clientWidth || 700) - 32);
-    
-    const calculatedScale = Math.min(availableWidth / baseViewport.width, 1.2);
-    const viewport = page.getViewport({ scale: Math.max(calculatedScale, 0.45) });
+    const availableWidth = Math.min(window.innerWidth - 48, (container.clientWidth || 700) - 32);
+    const baseViewport = page.getViewport({ scale: 1.0 });
+
+    const displayScale = Math.min(availableWidth / baseViewport.width, 1.2);
+    const displayViewport = page.getViewport({ scale: Math.max(displayScale, 0.45) });
+
+    const dpr = Math.max(window.devicePixelRatio || 1, 2);
+    const renderViewport = page.getViewport({ scale: displayViewport.scale * dpr });
 
     const bgCanvas = document.createElement('canvas');
     const ctx = bgCanvas.getContext('2d');
-    bgCanvas.width = viewport.width;
-    bgCanvas.height = viewport.height;
+    bgCanvas.width = renderViewport.width;
+    bgCanvas.height = renderViewport.height;
 
-    await page.render({ canvasContext: ctx, viewport }).promise;
+    await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
 
     if (fabricCanvas) fabricCanvas.dispose();
     fabricCanvas = new fabric.Canvas('pdf-fabric-canvas', { 
-      width: viewport.width, 
-      height: viewport.height,
+      width: displayViewport.width, 
+      height: displayViewport.height,
       isDrawingMode: false
     });
 
     fabric.Image.fromURL(bgCanvas.toDataURL(), (img) => {
+      img.set({
+        scaleX: displayViewport.width / img.width,
+        scaleY: displayViewport.height / img.height,
+        originX: 'left',
+        originY: 'top'
+      });
+
       fabricCanvas.setBackgroundImage(img, () => {
         fabricCanvas.renderAll();
         if (pageAnnotations[num] && pageAnnotations[num].length) {
