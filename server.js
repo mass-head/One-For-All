@@ -82,21 +82,10 @@ const getConversionParams = (inputExt, targetExt) => {
   let outFilter = targetExt;
 
   if (inputExt === 'pdf') {
-    inFilter = '--infilter="writer_pdf_import"';
-    if (targetExt === 'docx') outFilter = 'docx:"MS Word 2007 XML"';
-    else if (targetExt === 'doc') outFilter = 'doc:"MS Word 97"';
-    else if (targetExt === 'odt') outFilter = 'odt:writer8';
-    else if (targetExt === 'txt') outFilter = 'txt:Text (encoded)';
-    else if (targetExt === 'html') outFilter = 'html:HTML (StarWriter)';
-    else if (targetExt === 'epub') outFilter = 'epub';
+    inFilter = '--infilter=writer_pdf_import';
+    outFilter = targetExt;
   } else {
-    if (targetExt === 'pdf') outFilter = 'pdf:writer_pdf_Export';
-    else if (targetExt === 'docx') outFilter = 'docx:"MS Word 2007 XML"';
-    else if (targetExt === 'doc') outFilter = 'doc:"MS Word 97"';
-    else if (targetExt === 'odt') outFilter = 'odt:writer8';
-    else if (targetExt === 'txt') outFilter = 'txt:Text (encoded)';
-    else if (targetExt === 'html') outFilter = 'html:HTML (StarWriter)';
-    else if (targetExt === 'epub') outFilter = 'epub';
+    outFilter = targetExt;
   }
 
   return { inFilter, outFilter };
@@ -232,12 +221,23 @@ app.post('/api/convert', upload.single('file'), async (req, res) => {
       return res.send(Buffer.from(pdfBytes));
     }
 
-    // --- CASE 5: LibreOffice with isolated profile for headless stability ---
+    // --- CASE 5: LibreOffice Conversion ---
     const userProfileDir = path.join(TEMP_DIR, `lo_profile_${Date.now()}`);
+    const fileUri = `file:///${userProfileDir.replace(/\\/g, '/').replace(/ /g, '%20')}`;
     const { inFilter, outFilter } = getConversionParams(originalExt, cleanTargetExt);
-    const cmd = `${sofficeBin} "-env:UserInstallation=file://${userProfileDir.replace(/\\/g, '/')}" --headless ${inFilter} --convert-to ${outFilter} "${inputPath}" --outdir "${TEMP_DIR}"`;
+
+    const args = [
+      `"-env:UserInstallation=${fileUri}"`,
+      '--headless',
+      inFilter,
+      `--convert-to ${outFilter}`,
+      `"${inputPath}"`,
+      `--outdir "${TEMP_DIR}"`
+    ].filter(Boolean).join(' ');
+
+    const cmd = `${sofficeBin} ${args}`;
     
-    await execPromise(cmd, { timeout: 30000 });
+    await execPromise(cmd, { timeout: 45000 });
 
     const generatedFileName = `${path.parse(inputPath).name}.${cleanTargetExt}`;
     const generatedFilePath = path.join(TEMP_DIR, generatedFileName);
